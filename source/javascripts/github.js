@@ -10,15 +10,18 @@ var github = (function(){
   return {
     showRepos: function(options){
       $.ajax({
-          url: "http://github.com/api/v2/json/repos/show/"+options.user+"?callback=?"
-        , type: 'jsonp'
-        , error: function (err) { $(options.target + ' li.loading').addClass('error').text("Error loading feed"); }
+          url: "https://api.github.com/users/"+options.user+"/repos?type=pushed"
+        , type: 'json'
+        , error: function (err) {
+          $(options.target + ' li.loading').addClass('error').text("Error loading feed");
+        }
         , success: function(data) {
           var repos = [];
-          if (!data || !data.repositories) { return; }
-          for (var i = 0; i < data.repositories.length; i++) {
-            if (options.skip_forks && data.repositories[i].fork) { continue; }
-            repos.push(data.repositories[i]);
+          if (!data || !data.length) { return; }
+          for (var i = 0; i < data.length; i++) {
+            if (options.skip_forks && data[i].fork) { continue; }
+            if (data[i].description == "") { continue; }
+            repos.push(data[i]);
           }
           repos.sort(function(a, b) {
             var aDate = new Date(a.pushed_at).valueOf(),

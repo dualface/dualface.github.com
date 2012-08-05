@@ -3,8 +3,8 @@
 # ----------------------- #
 
 url: http://dualface.github.com
-title: My Octopress Blog
-subtitle: A blogging framework for hackers.
+title: "我是妖怪"
+subtitle: "峰山有路淫为径，欲海无涯荡作舟"
 author: YuLei Liao
 simple_search: http://google.com/search
 description:
@@ -19,7 +19,7 @@ date_format: "ordinal"
 subscribe_rss: /atom.xml
 subscribe_email:
 # RSS feeds can list your email address if you like
-email:
+email: dualface@gmail.com
 
 # ----------------------- #
 #    Jekyll & Plugins     #
@@ -59,8 +59,8 @@ default_asides: [asides/recent_posts.html, asides/github.html, asides/delicious.
 # ----------------------- #
 
 # Github repositories
-github_user:
-github_repo_count: 0
+github_user: dualface
+github_repo_count: 5
 github_show_profile_link: true
 github_skip_forks: true
 
@@ -68,9 +68,9 @@ github_skip_forks: true
 twitter_user:
 twitter_tweet_count: 4
 twitter_show_replies: false
-twitter_follow_button: true
+twitter_follow_button: false
 twitter_show_follower_count: false
-twitter_tweet_button: true
+twitter_tweet_button: false
 
 # Google +1
 google_plus_one: false
