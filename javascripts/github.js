@@ -13,7 +13,7 @@ var github = (function(){
           url: "https://api.github.com/users/"+options.user+"/repos?type=pushed"
         , type: 'json'
         , error: function (err) {
-          $(options.target + ' li.loading').addClass('error').text("Error loading feed");
+          $(options.target + ' li.loading').addClass('error').text("Error loading feed" + err);
         }
         , success: function(data) {
           var repos = [];
