@@ -1,24 +1,96 @@
-<?xml version="1.0" encoding="utf-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom">
 
-  <title><![CDATA[我是妖怪]]></title>
-  <link href="http://dualface.github.com/atom.xml" rel="self"/>
-  <link href="http://dualface.github.com/"/>
-  <updated>2012-08-18T01:24:39+08:00</updated>
-  <id>http://dualface.github.com/</id>
-  <author>
-    <name><![CDATA[YuLei Liao]]></name>
-    <email><![CDATA[dualface@gmail.com]]></email>
-  </author>
-  <generator uri="http://octopress.org/">Octopress</generator>
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>cocos2d-x 2.0 自适应多种分辨率 - 我是妖怪</title>
+  <meta name="author" content="YuLei Liao">
 
   
-  <entry>
-    <title type="html"><![CDATA[cocos2d-x 2.0 自适应多种分辨率]]></title>
-    <link href="http://dualface.github.com/blog/2012/08/17/cocos2d-x-2-dot-0-multi-resolution/"/>
-    <updated>2012-08-17T23:17:00+08:00</updated>
-    <id>http://dualface.github.com/blog/2012/08/17/cocos2d-x-2-dot-0-multi-resolution</id>
-    <content type="html"><![CDATA[<p>cocos2d-x 2.0 提供一个极有价值的新特征: setDesignResolutionSize() 。</p>
+  <meta name="description" content="cocos2d-x 2.0 提供一个极有价值的新特征: setDesignResolutionSize() 。 这个函数用于指定一个 OpenGL 视图，然后将这个视图映射到设备屏幕上。根据不同的设定，视图会自动缩放显示内容，为 cocos2d-x 自适应多种分辨率提供了基本支持。 &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://dualface.github.com/blog/2012/08/17/cocos2d-x-2-dot-0-multi-resolution/">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="/javascripts/ender.js"></script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <link href="/atom.xml" rel="alternate" title="我是妖怪" type="application/atom+xml">
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">我是妖怪</a></h1>
+  
+    <h2>峰山有路淫为径，欲海无涯荡作舟</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="http://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:dualface.github.com" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">Cocos2d-x 2.0 自适应多种分辨率</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2012-08-17T23:17:00+08:00" pubdate data-updated="true">Aug 17<span>th</span>, 2012</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>cocos2d-x 2.0 提供一个极有价值的新特征: setDesignResolutionSize() 。</p>
 
 <p>这个函数用于指定一个 OpenGL 视图，然后将这个视图映射到设备屏幕上。根据不同的设定，视图会自动缩放显示内容，为 cocos2d-x 自适应多种分辨率提供了基本支持。</p>
 
@@ -92,21 +164,21 @@ Android Pad 2       | 1280px |  800px
 
 <p>下面几个图展示 2048px 原稿在不同设备上的可视区域：</p>
 
-<p><img src="http://dualface.github.com/upload/cocos2d-x-2.0-multires/multires_01.png" alt="" /></p>
+<p><img src="/upload/cocos2d-x-2.0-multires/multires_01.png" alt="" /></p>
 
-<p><img src="http://dualface.github.com/upload/cocos2d-x-2.0-multires/multires_02.png" alt="" /></p>
+<p><img src="/upload/cocos2d-x-2.0-multires/multires_02.png" alt="" /></p>
 
-<p><img src="http://dualface.github.com/upload/cocos2d-x-2.0-multires/multires_03.png" alt="" /></p>
+<p><img src="/upload/cocos2d-x-2.0-multires/multires_03.png" alt="" /></p>
 
-<p><img src="http://dualface.github.com/upload/cocos2d-x-2.0-multires/multires_04.png" alt="" /></p>
+<p><img src="/upload/cocos2d-x-2.0-multires/multires_04.png" alt="" /></p>
 
-<p><img src="http://dualface.github.com/upload/cocos2d-x-2.0-multires/multires_05.png" alt="" /></p>
+<p><img src="/upload/cocos2d-x-2.0-multires/multires_05.png" alt="" /></p>
 
-<p><img src="http://dualface.github.com/upload/cocos2d-x-2.0-multires/multires_06.png" alt="" /></p>
+<p><img src="/upload/cocos2d-x-2.0-multires/multires_06.png" alt="" /></p>
 
-<p><img src="http://dualface.github.com/upload/cocos2d-x-2.0-multires/multires_07.png" alt="" /></p>
+<p><img src="/upload/cocos2d-x-2.0-multires/multires_07.png" alt="" /></p>
 
-<p>Photoshop 源文件下载地址: <a href="http://dualface.github.com/upload/cocos2d-x-2.0-multires/multires.psd">multires.psd</a></p>
+<p>Photoshop 源文件下载地址: <a href="/upload/cocos2d-x-2.0-multires/multires.psd">multires.psd</a></p>
 
 <p>~</p>
 
@@ -114,7 +186,7 @@ Android Pad 2       | 1280px |  800px
 
 <p>相比背景图，界面元素的制作只需要考虑一点：<strong>必须能够放置在最小的可视区域中</strong>。如下图界面底部有一排按钮，这些按钮在各种分辨率下都能完整显示：</p>
 
-<p><img src="http://dualface.github.com/upload/cocos2d-x-2.0-multires/multires_ui01.png" alt="" /></p>
+<p><img src="/upload/cocos2d-x-2.0-multires/multires_ui01.png" alt="" /></p>
 
 <p>在导出界面元素的 PNG 图片时，仍然使用脚本文件和 ImageMagick 按照特定比例自动缩放。</p>
 
@@ -180,29 +252,127 @@ multires.demo1.win32.exe 854 480
 
 <ul>
 <li>示例程序只包含按照 960px * 720px 制作的素材。</li>
-<li>示例程序可执行文件以及源代码下载：<a href="http://dualface.github.com/upload/cocos2d-x-2.0-multires/multires.demo1.win32.zip">multires.demo1.win32.zip</a></li>
+<li>示例程序可执行文件以及源代码下载：<a href="/upload/cocos2d-x-2.0-multires/multires.demo1.win32.zip">multires.demo1.win32.zip</a></li>
 </ul>
 
-]]></content>
-  </entry>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
   
-  <entry>
-    <title type="html"><![CDATA[转到新博客，Octopress 我来啦]]></title>
-    <link href="http://dualface.github.com/blog/2012/08/05/first-octopress-post/"/>
-    <updated>2012-08-05T16:58:00+08:00</updated>
-    <id>http://dualface.github.com/blog/2012/08/05/first-octopress-post</id>
-    <content type="html"><![CDATA[<p>初步试用 Octopress，感觉很爽，尤其是下面几点：</p>
 
-<ul>
-<li>支持 Markdown 格式编写 blog：WordPress 折腾半天各种 Markdown 插件效果都不理想；</li>
-<li>支持代码高亮：WordPress 插入代码真心麻烦啊；</li>
-<li>直接放在 github.com 上，省的自己配置了：越来越厌烦 Unix/Linux 下安装配置各种软件；</li>
-<li>非常 Cool！</li>
-</ul>
+<span class="byline author vcard">Posted by <span class="fn">YuLei Liao</span></span>
+
+      
 
 
-<p>好吧，希望新博客能够坚持写下去 :)</p>
-]]></content>
-  </entry>
+
+
+
+
+
+
   
-</feed>
+
+
+<time datetime="2012-08-17T23:17:00+08:00" pubdate data-updated="true">Aug 17<span>th</span>, 2012</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/cocos2dx/'>cocos2dx</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2012/08/05/first-octopress-post/" title="Previous Post: 转到新博客，Octopress 我来啦">&laquo; 转到新博客，Octopress 我来啦</a>
+      
+      
+    </p>
+  </footer>
+</article>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2012/08/17/cocos2d-x-2-dot-0-multi-resolution/">cocos2d-x 2.0 自适应多种分辨率</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2012/08/05/first-octopress-post/">转到新博客，Octopress 我来啦</a>
+      </li>
+    
+  </ul>
+</section>
+
+<section>
+  <h1>GitHub Repos</h1>
+  <ul id="gh_repos">
+    <li>
+      <a href="https://api.github.com/repos/dualface/cocos2d-x-extensions">cocos2d-x-extensions</a>
+      <p>Extensions for cocos2-x.</p>
+    </li>
+    <li>
+      <a href="https://api.github.com/repos/dualface/cocos2d-x-lua-framework">cocos2d-x-lua-framework</a>
+      <p>QeePlay Lua Game Framework for Cocos2d-x</p>
+    </li>
+    <li>
+      <a href="https://api.github.com/repos/dualface/ngx-lua-webapp-framework">ngx-lua-webapp-framework</a>
+      <p>Lua webapp framework for Nginx-Lua</p>
+    </li>
+    <li>
+      <a href="https://api.github.com/repos/dualface/luadocx">luadocx</a>
+      <p>Documentation Generator Tool for the Lua language</p>
+    </li>
+  </ul>
+  
+  <a href="https://github.com/dualface">@dualface</a> on GitHub
+  
+</section>
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2012 - YuLei Liao -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+
+
+
+
+
+
+
+
+
+
+</body>
+</html>
