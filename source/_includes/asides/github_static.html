@@ -1,0 +1,26 @@
+{% if site.github_user %}
+<section>
+  <h1>GitHub Repos</h1>
+  <ul id="gh_repos">
+    <li>
+      <a href="https://api.github.com/repos/dualface/cocos2d-x-extensions">cocos2d-x-extensions</a>
+      <p>Extensions for cocos2-x.</p>
+    </li>
+    <li>
+      <a href="https://api.github.com/repos/dualface/cocos2d-x-lua-framework">cocos2d-x-lua-framework</a>
+      <p>QeePlay Lua Game Framework for Cocos2d-x</p>
+    </li>
+    <li>
+      <a href="https://api.github.com/repos/dualface/ngx-lua-webapp-framework">ngx-lua-webapp-framework</a>
+      <p>Lua webapp framework for Nginx-Lua</p>
+    </li>
+    <li>
+      <a href="https://api.github.com/repos/dualface/luadocx">luadocx</a>
+      <p>Documentation Generator Tool for the Lua language</p>
+    </li>
+  </ul>
+  {% if site.github_show_profile_link %}
+  <a href="https://github.com/{{site.github_user}}">@{{site.github_user}}</a> on GitHub
+  {% endif %}
+</section>
+{% endif %}
