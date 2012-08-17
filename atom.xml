@@ -4,7 +4,7 @@
   <title><![CDATA[我是妖怪]]></title>
   <link href="http://dualface.github.com/atom.xml" rel="self"/>
   <link href="http://dualface.github.com/"/>
-  <updated>2012-08-18T01:24:39+08:00</updated>
+  <updated>2012-08-18T01:38:05+08:00</updated>
   <id>http://dualface.github.com/</id>
   <author>
     <name><![CDATA[YuLei Liao]]></name>
@@ -183,6 +183,28 @@ multires.demo1.win32.exe 854 480
 <li>示例程序可执行文件以及源代码下载：<a href="http://dualface.github.com/upload/cocos2d-x-2.0-multires/multires.demo1.win32.zip">multires.demo1.win32.zip</a></li>
 </ul>
 
+
+<p>~</p>
+
+<h2>补充说明</h2>
+
+<p>本文前面描述了如何创建适合不同分辨率的图片，但最后的示例程序并没有考虑这一点，而是用一套素材就搞定了多种分辨率。实际上，我个人推荐使用一套素材适应多种分辨率，最多再为 New iPad 单独准备一套素材，这样可以显著减少工作量。</p>
+
+<p>如果一定要按照不同分辨率使用不同的素材，那么在显示图片时需要调用 setScale() 调整图片的缩放比例。这样做的原因是 setDesignResolutionSize() 设置虚拟分辨率后，会指定一个全局的缩放比例，所有的图片即便是 scale = 100%，也会自动缩放。所以当图片尺寸和虚拟分辨率不一致时，我们就需要手动调整图片缩放比例了。</p>
+
+<p>假设设备分辨率是 1280px * 720px，虚拟分辨率是 960pt * 540pt，背景图是 1280px * 800px。要确保背景图 1:1 显示在屏幕上，参考如下代码：</p>
+
+<pre><code>const CCSize&amp; winSize = CCDirector::sharedDirector()-&gt;getWinSize();
+float scale = CCEGLView::sharedOpenGLView().getScaleX();
+local bg = CCSprite::create("bg.jpg")
+bg-&gt;setPosition(ccp(winSize.width / 2, winSize.height / 2));
+bg-&gt;setScale(1.0f / scale); // 这里重置图片缩放比例，确保图片按 1:1 显示在屏幕上
+addChild(bg);
+</code></pre>
+
+<p>~</p>
+
+<p>-EOF-</p>
 ]]></content>
   </entry>
   
