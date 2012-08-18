@@ -4,7 +4,7 @@
   <title><![CDATA[我是妖怪]]></title>
   <link href="http://dualface.github.com/atom.xml" rel="self"/>
   <link href="http://dualface.github.com/"/>
-  <updated>2012-08-18T01:38:05+08:00</updated>
+  <updated>2012-08-18T10:49:31+08:00</updated>
   <id>http://dualface.github.com/</id>
   <author>
     <name><![CDATA[YuLei Liao]]></name>
@@ -24,7 +24,8 @@
 
 <p>不过要真正实现自适应分辨率，从场景设计、美术制作到程序编写，都需要遵循一套规范，才能极大减少工作量。</p>
 
-<p><strong>注意：本文假定游戏是横向显示的。</strong></p>
+<blockquote><p>注意：本文假定游戏是横向显示的。</p></blockquote>
+
 
 <p>~</p>
 
@@ -54,17 +55,58 @@
 
 <p>在开始制作背景图前，我们看看市面上各种设备（480 像素分辨率的老设备 2012 的游戏应该可以无视了）常见的像素分辨率（resolution in pixels）：</p>
 
-<pre><code>Device              | Width  | Height
-------------------- | ------ | ------
-iPad                | 1024px |  768px
-New iPad            | 2048px | 1536px
-iPhone              |  960px |  640px
-Android Phone 1     |  800px |  480px
-Android Phone 2     |  854px |  480px
-Android Phone 3     | 1280px |  720px
-Android Pad 1       | 1024px |  600px
-Android Pad 2       | 1280px |  800px
-</code></pre>
+<table>
+<thead>
+<tr>
+<th>Device              </th>
+<th> Width  </th>
+<th> Height</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>iPad                </td>
+<td> 1024px </td>
+<td>  768px</td>
+</tr>
+<tr>
+<td>New iPad            </td>
+<td> 2048px </td>
+<td> 1536px</td>
+</tr>
+<tr>
+<td>iPhone              </td>
+<td>  960px </td>
+<td>  640px</td>
+</tr>
+<tr>
+<td>Android Phone 1     </td>
+<td>  800px </td>
+<td>  480px</td>
+</tr>
+<tr>
+<td>Android Phone 2     </td>
+<td>  854px </td>
+<td>  480px</td>
+</tr>
+<tr>
+<td>Android Phone 3     </td>
+<td> 1280px </td>
+<td>  720px</td>
+</tr>
+<tr>
+<td>Android Pad 1       </td>
+<td> 1024px </td>
+<td>  600px</td>
+</tr>
+<tr>
+<td>Android Pad 2       </td>
+<td> 1280px </td>
+<td>  800px</td>
+</tr>
+</tbody>
+</table>
+
 
 <p>经过几个游戏的实践，我们确定了几个背景图的分辨率：</p>
 
@@ -134,31 +176,125 @@ Android Pad 2       | 1280px |  800px
 
 <p>下面的表格整理了各种设备分辨率与 960pt 宽度虚拟分辨率的对应关系：</p>
 
-<pre><code>Device              | Width  | Height  | Virtual Width | Virutal Height | Scale
-------------------- | ------ | ------- | ------------- | -------------- | ------------
-iPad                | 1024px |  768px  | 960pt         | 720pt          | 1.066666667
-New iPad            | 2048px | 1536px  | 960pt         | 720pt          | 2.133333333
-iPhone              |  960px |  640px  | 960pt         | 640pt          | 1.0
-Android Phone 1     |  800px |  480px  | 960pt         | 576pt          | 0.833333333
-Android Phone 2     |  854px |  480px  | 960pt         | 540pt          | 0.889583333
-Android Phone 3     | 1280px |  720px  | 960pt         | 540pt          | 1.333333333
-Android Pad 1       | 1024px |  600px  | 960pt         | 562pt          | 1.066666667
-Android Pad 2       | 1280px |  800px  | 960pt         | 600pt          | 1.333333333
-</code></pre>
+<table>
+<thead>
+<tr>
+<th>Device              </th>
+<th> Width  </th>
+<th> Height  </th>
+<th> Virtual Width </th>
+<th> Virutal Height </th>
+<th> Scale</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>iPad                </td>
+<td> 1024px </td>
+<td>  768px  </td>
+<td> 960pt         </td>
+<td> 720pt          </td>
+<td> 1.066666667</td>
+</tr>
+<tr>
+<td>New iPad            </td>
+<td> 2048px </td>
+<td> 1536px  </td>
+<td> 960pt         </td>
+<td> 720pt          </td>
+<td> 2.133333333</td>
+</tr>
+<tr>
+<td>iPhone              </td>
+<td>  960px </td>
+<td>  640px  </td>
+<td> 960pt         </td>
+<td> 640pt          </td>
+<td> 1.0</td>
+</tr>
+<tr>
+<td>Android Phone 1     </td>
+<td>  800px </td>
+<td>  480px  </td>
+<td> 960pt         </td>
+<td> 576pt          </td>
+<td> 0.833333333</td>
+</tr>
+<tr>
+<td>Android Phone 2     </td>
+<td>  854px </td>
+<td>  480px  </td>
+<td> 960pt         </td>
+<td> 540pt          </td>
+<td> 0.889583333</td>
+</tr>
+<tr>
+<td>Android Phone 3     </td>
+<td> 1280px </td>
+<td>  720px  </td>
+<td> 960pt         </td>
+<td> 540pt          </td>
+<td> 1.333333333</td>
+</tr>
+<tr>
+<td>Android Pad 1       </td>
+<td> 1024px </td>
+<td>  600px  </td>
+<td> 960pt         </td>
+<td> 562pt          </td>
+<td> 1.066666667</td>
+</tr>
+<tr>
+<td>Android Pad 2       </td>
+<td> 1280px </td>
+<td>  800px  </td>
+<td> 960pt         </td>
+<td> 600pt          </td>
+<td> 1.333333333</td>
+</tr>
+</tbody>
+</table>
+
 
 <h3>根据参考点定位界面元素</h3>
 
 <p>在游戏初始化时，引擎就会根据设备的实际分辨率，自动设定好对应的虚拟分辨率，并且确定屏幕上的几个参考点：</p>
 
-<pre><code>Position            | Value
-------------------- | -----------------------
-left                | 0pt
-right               | 959pt
-top                 | 虚拟分辨率的高度 - 1
-bottom              | 0pt
-center x            | 480pt
-center y            | 虚拟分辨率的高度 / 2
-</code></pre>
+<table>
+<thead>
+<tr>
+<th>Position            </th>
+<th> Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>left                </td>
+<td> 0pt</td>
+</tr>
+<tr>
+<td>right               </td>
+<td> 959pt</td>
+</tr>
+<tr>
+<td>top                 </td>
+<td> 虚拟分辨率的高度 - 1</td>
+</tr>
+<tr>
+<td>bottom              </td>
+<td> 0pt</td>
+</tr>
+<tr>
+<td>center x            </td>
+<td> 480pt</td>
+</tr>
+<tr>
+<td>center y            </td>
+<td> 虚拟分辨率的高度 / 2</td>
+</tr>
+</tbody>
+</table>
+
 
 <p>有了参考点，定位界面元素就很简单了。例如一个按钮的原点（按钮图片中心点）相对于屏幕左侧 40pt，相对于屏幕底部 30pt。那么在不同分辨率的设备上，这个按钮和屏幕左下角的距离都是差不多的。</p>
 
