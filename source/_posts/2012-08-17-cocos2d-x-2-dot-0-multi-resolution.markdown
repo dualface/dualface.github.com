@@ -10,9 +10,13 @@ cocos2d-x 2.0 提供一个极有价值的新特征: setDesignResolutionSize() �
 
 这个函数用于指定一个 OpenGL 视图，然后将这个视图映射到设备屏幕上。根据不同的设定，视图会自动缩放显示内容，为 cocos2d-x 自适应多种分辨率提供了基本支持。
 
+<!--more-->
+
 不过要真正实现自适应分辨率，从场景设计、美术制作到程序编写，都需要遵循一套规范，才能极大减少工作量。
 
-**注意：本文假定游戏是横向显示的。**
+{% blockquote %}
+注意：本文假定游戏是横向显示的。
+{% endblockquote %}
 
 ~
 
@@ -36,16 +40,16 @@ cocos2d-x 2.0 提供一个极有价值的新特征: setDesignResolutionSize() �
 
 在开始制作背景图前，我们看看市面上各种设备（480 像素分辨率的老设备 2012 的游戏应该可以无视了）常见的像素分辨率（resolution in pixels）：
 
-    Device              | Width  | Height
-    ------------------- | ------ | ------
-    iPad                | 1024px |  768px
-    New iPad            | 2048px | 1536px
-    iPhone              |  960px |  640px
-    Android Phone 1     |  800px |  480px
-    Android Phone 2     |  854px |  480px
-    Android Phone 3     | 1280px |  720px
-    Android Pad 1       | 1024px |  600px
-    Android Pad 2       | 1280px |  800px
+Device              | Width  | Height
+------------------- | ------ | ------
+iPad                | 1024px |  768px
+New iPad            | 2048px | 1536px
+iPhone              |  960px |  640px
+Android Phone 1     |  800px |  480px
+Android Phone 2     |  854px |  480px
+Android Phone 3     | 1280px |  720px
+Android Pad 1       | 1024px |  600px
+Android Pad 2       | 1280px |  800px
 
 经过几个游戏的实践，我们确定了几个背景图的分辨率：
 
@@ -115,30 +119,30 @@ Photoshop 源文件下载地址: [multires.psd](/upload/cocos2d-x-2.0-multires/m
 
 下面的表格整理了各种设备分辨率与 960pt 宽度虚拟分辨率的对应关系：
 
-    Device              | Width  | Height  | Virtual Width | Virutal Height | Scale
-    ------------------- | ------ | ------- | ------------- | -------------- | ------------
-    iPad                | 1024px |  768px  | 960pt         | 720pt          | 1.066666667
-    New iPad            | 2048px | 1536px  | 960pt         | 720pt          | 2.133333333
-    iPhone              |  960px |  640px  | 960pt         | 640pt          | 1.0
-    Android Phone 1     |  800px |  480px  | 960pt         | 576pt          | 0.833333333
-    Android Phone 2     |  854px |  480px  | 960pt         | 540pt          | 0.889583333
-    Android Phone 3     | 1280px |  720px  | 960pt         | 540pt          | 1.333333333
-    Android Pad 1       | 1024px |  600px  | 960pt         | 562pt          | 1.066666667
-    Android Pad 2       | 1280px |  800px  | 960pt         | 600pt          | 1.333333333
+Device              | Width  | Height  | Virtual Width | Virutal Height | Scale
+------------------- | ------ | ------- | ------------- | -------------- | ------------
+iPad                | 1024px |  768px  | 960pt         | 720pt          | 1.066666667
+New iPad            | 2048px | 1536px  | 960pt         | 720pt          | 2.133333333
+iPhone              |  960px |  640px  | 960pt         | 640pt          | 1.0
+Android Phone 1     |  800px |  480px  | 960pt         | 576pt          | 0.833333333
+Android Phone 2     |  854px |  480px  | 960pt         | 540pt          | 0.889583333
+Android Phone 3     | 1280px |  720px  | 960pt         | 540pt          | 1.333333333
+Android Pad 1       | 1024px |  600px  | 960pt         | 562pt          | 1.066666667
+Android Pad 2       | 1280px |  800px  | 960pt         | 600pt          | 1.333333333
 
 
 ### 根据参考点定位界面元素
 
 在游戏初始化时，引擎就会根据设备的实际分辨率，自动设定好对应的虚拟分辨率，并且确定屏幕上的几个参考点：
 
-    Position            | Value
-    ------------------- | -----------------------
-    left                | 0pt
-    right               | 959pt
-    top                 | 虚拟分辨率的高度 - 1
-    bottom              | 0pt
-    center x            | 480pt
-    center y            | 虚拟分辨率的高度 / 2
+Position            | Value
+------------------- | -----------------------
+left                | 0pt
+right               | 959pt
+top                 | 虚拟分辨率的高度 - 1
+bottom              | 0pt
+center x            | 480pt
+center y            | 虚拟分辨率的高度 / 2
 
 有了参考点，定位界面元素就很简单了。例如一个按钮的原点（按钮图片中心点）相对于屏幕左侧 40pt，相对于屏幕底部 30pt。那么在不同分辨率的设备上，这个按钮和屏幕左下角的距离都是差不多的。
 
@@ -150,8 +154,10 @@ Photoshop 源文件下载地址: [multires.psd](/upload/cocos2d-x-2.0-multires/m
 
 为了方便大家进行测试，本文的示例工程已经编译成 Windows 可执行文件。运行时可以用下列命令行启动以便测试不同分辨率：
 
-    # 如果没有指定命令行参数，则默认使用 960px * 640px 的屏幕分辨率。
-    multires.demo1.win32.exe 854 480
+``` bash 命令行参数
+# 如果没有指定命令行参数，则默认使用 960px * 640px 的屏幕分辨率。
+multires.demo1.win32.exe 854 480
+```
 
 或者双击 test_multires.cmd 直接查看不同分辨率的运行效果。
 
@@ -170,12 +176,14 @@ Photoshop 源文件下载地址: [multires.psd](/upload/cocos2d-x-2.0-multires/m
 
 假设设备分辨率是 1280px * 720px，虚拟分辨率是 960pt * 540pt，背景图是 1280px * 800px。要确保背景图 1:1 显示在屏幕上，参考如下代码：
 
-    const CCSize& winSize = CCDirector::sharedDirector()->getWinSize();
-    float scale = CCEGLView::sharedOpenGLView().getScaleX();
-    local bg = CCSprite::create("bg.jpg")
-    bg->setPosition(ccp(winSize.width / 2, winSize.height / 2));
-    bg->setScale(1.0f / scale); // 这里重置图片缩放比例，确保图片按 1:1 显示在屏幕上
-    addChild(bg);
+``` cpp 让图片按 1:1 显示在屏幕上
+const CCSize& winSize = CCDirector::sharedDirector()->getWinSize();
+float scale = CCEGLView::sharedOpenGLView().getScaleX();
+CCSprite* bg = CCSprite::create("bg.jpg")
+bg->setPosition(ccp(winSize.width / 2, winSize.height / 2));
+bg->setScale(1.0f / scale); // 这里重置图片缩放比例，确保图片按 1:1 显示在屏幕上
+addChild(bg);
+```
 
 ~
 

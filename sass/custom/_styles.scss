@@ -1,2 +1,72 @@
 // This File is imported last, and will override other styles in the cascade
 // Add styles here to make changes without digging in too much
+
+blockquote {
+    font-style: normal;
+}
+
+li {
+    text-indent: 0em;
+    padding-left: 0.8em;
+    margin-left: 1.2em;
+    margin-bottom: 2em;
+}
+
+li p {
+    margin-top: 0.1em;
+    margin-bottom: 0.8em;
+}
+
+strong {
+    color: #a63;
+}
+
+h1.entry-title {
+    font-size: 2.2em !important;
+}
+
+div.entry-content h2 {
+    font-size: 1.7em !important;
+}
+
+div.entry-content h3 {
+    font-size: 1.2em !important;
+    margin-top: 2em !important;
+}
+
+div.entry-content table {
+    margin: 2em auto 2em auto;
+    min-width: 80%;
+    border-collapse: separate;
+    border-spacing: 2px;
+    font-family: $mono;
+    font-size: 0.9em;
+}
+
+div.entry-content table th {
+    padding: 0.2em 0.4em;
+    line-height: 2em;
+    font-weight: bold;
+    background-color: #eef;
+    border-bottom: 2px solid #ccc;
+}
+
+div.entry-content tbody tr:hover {
+    background-color: #ddd !important;
+}
+
+div.entry-content table td {
+    padding: 0.2em 0.4em;
+    line-height: 1.6em;
+    border-bottom: 1px dotted #ccc;
+}
+
+div.entry-content tbody tr:nth-of-type(even) {
+    background-color: #eee;
+}
+
+div.entry-content p img {
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+}
