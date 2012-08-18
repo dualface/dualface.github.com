@@ -85,6 +85,8 @@
 
 <time datetime="2012-08-17T23:17:00+08:00" pubdate data-updated="true">Aug 17<span>th</span>, 2012</time>
         
+         | <a href="#disqus_thread">Comments</a>
+        
       </p>
     
   </header>
@@ -93,6 +95,9 @@
 <div class="entry-content"><p>cocos2d-x 2.0 提供一个极有价值的新特征: setDesignResolutionSize() 。</p>
 
 <p>这个函数用于指定一个 OpenGL 视图，然后将这个视图映射到设备屏幕上。根据不同的设定，视图会自动缩放显示内容，为 cocos2d-x 自适应多种分辨率提供了基本支持。</p>
+
+<!--more-->
+
 
 <p>不过要真正实现自适应分辨率，从场景设计、美术制作到程序编写，都需要遵循一套规范，才能极大减少工作量。</p>
 
@@ -378,9 +383,12 @@
 
 <p>为了方便大家进行测试，本文的示例工程已经编译成 Windows 可执行文件。运行时可以用下列命令行启动以便测试不同分辨率：</p>
 
-<pre><code># 如果没有指定命令行参数，则默认使用 960px * 640px 的屏幕分辨率。
-multires.demo1.win32.exe 854 480
-</code></pre>
+<figure class='code'><figcaption><span>命令行参数</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="c"># 如果没有指定命令行参数，则默认使用 960px * 640px 的屏幕分辨率。</span>
+</span><span class='line'>multires.demo1.win32.exe 854 480
+</span></code></pre></td></tr></table></div></figure>
+
 
 <p>或者双击 test_multires.cmd 直接查看不同分辨率的运行效果。</p>
 
@@ -402,13 +410,20 @@ multires.demo1.win32.exe 854 480
 
 <p>假设设备分辨率是 1280px * 720px，虚拟分辨率是 960pt * 540pt，背景图是 1280px * 800px。要确保背景图 1:1 显示在屏幕上，参考如下代码：</p>
 
-<pre><code>const CCSize&amp; winSize = CCDirector::sharedDirector()-&gt;getWinSize();
-float scale = CCEGLView::sharedOpenGLView().getScaleX();
-local bg = CCSprite::create("bg.jpg")
-bg-&gt;setPosition(ccp(winSize.width / 2, winSize.height / 2));
-bg-&gt;setScale(1.0f / scale); // 这里重置图片缩放比例，确保图片按 1:1 显示在屏幕上
-addChild(bg);
-</code></pre>
+<figure class='code'><figcaption><span>让图片按 1:1 显示在屏幕上</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='cpp'><span class='line'><span class="k">const</span> <span class="n">CCSize</span><span class="o">&amp;</span> <span class="n">winSize</span> <span class="o">=</span> <span class="n">CCDirector</span><span class="o">::</span><span class="n">sharedDirector</span><span class="p">()</span><span class="o">-&gt;</span><span class="n">getWinSize</span><span class="p">();</span>
+</span><span class='line'><span class="kt">float</span> <span class="n">scale</span> <span class="o">=</span> <span class="n">CCEGLView</span><span class="o">::</span><span class="n">sharedOpenGLView</span><span class="p">().</span><span class="n">getScaleX</span><span class="p">();</span>
+</span><span class='line'><span class="n">CCSprite</span><span class="o">*</span> <span class="n">bg</span> <span class="o">=</span> <span class="n">CCSprite</span><span class="o">::</span><span class="n">create</span><span class="p">(</span><span class="s">&quot;bg.jpg&quot;</span><span class="p">)</span>
+</span><span class='line'><span class="n">bg</span><span class="o">-&gt;</span><span class="n">setPosition</span><span class="p">(</span><span class="n">ccp</span><span class="p">(</span><span class="n">winSize</span><span class="p">.</span><span class="n">width</span> <span class="o">/</span> <span class="mi">2</span><span class="p">,</span> <span class="n">winSize</span><span class="p">.</span><span class="n">height</span> <span class="o">/</span> <span class="mi">2</span><span class="p">));</span>
+</span><span class='line'><span class="n">bg</span><span class="o">-&gt;</span><span class="n">setScale</span><span class="p">(</span><span class="mf">1.0f</span> <span class="o">/</span> <span class="n">scale</span><span class="p">);</span> <span class="c1">// 这里重置图片缩放比例，确保图片按 1:1 显示在屏幕上</span>
+</span><span class='line'><span class="n">addChild</span><span class="p">(</span><span class="n">bg</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
 
 <p>~</p>
 
@@ -462,6 +477,12 @@ addChild(bg);
     </p>
   </footer>
 </article>
+
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
 
 </div>
 
@@ -521,6 +542,22 @@ addChild(bg);
 
 </footer>
   
+
+<script type="text/javascript">
+      var disqus_shortname = 'dualface';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'http://dualface.github.com/blog/2012/08/17/cocos2d-x-2-dot-0-multi-resolution/';
+        var disqus_url = 'http://dualface.github.com/blog/2012/08/17/cocos2d-x-2-dot-0-multi-resolution/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = 'http://' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
 
 
 

@@ -4,7 +4,7 @@
   <title><![CDATA[Category: cocos2dx | 我是妖怪]]></title>
   <link href="http://dualface.github.com/blog/categories/cocos2dx/atom.xml" rel="self"/>
   <link href="http://dualface.github.com/"/>
-  <updated>2012-08-18T10:49:31+08:00</updated>
+  <updated>2012-08-18T11:05:47+08:00</updated>
   <id>http://dualface.github.com/</id>
   <author>
     <name><![CDATA[YuLei Liao]]></name>
@@ -21,6 +21,9 @@
     <content type="html"><![CDATA[<p>cocos2d-x 2.0 提供一个极有价值的新特征: setDesignResolutionSize() 。</p>
 
 <p>这个函数用于指定一个 OpenGL 视图，然后将这个视图映射到设备屏幕上。根据不同的设定，视图会自动缩放显示内容，为 cocos2d-x 自适应多种分辨率提供了基本支持。</p>
+
+<!--more-->
+
 
 <p>不过要真正实现自适应分辨率，从场景设计、美术制作到程序编写，都需要遵循一套规范，才能极大减少工作量。</p>
 
@@ -305,9 +308,12 @@
 
 <p>为了方便大家进行测试，本文的示例工程已经编译成 Windows 可执行文件。运行时可以用下列命令行启动以便测试不同分辨率：</p>
 
-<pre><code># 如果没有指定命令行参数，则默认使用 960px * 640px 的屏幕分辨率。
-multires.demo1.win32.exe 854 480
-</code></pre>
+<p>``` bash 命令行参数</p>
+
+<h1>如果没有指定命令行参数，则默认使用 960px * 640px 的屏幕分辨率。</h1>
+
+<p>multires.demo1.win32.exe 854 480
+```</p>
 
 <p>或者双击 test_multires.cmd 直接查看不同分辨率的运行效果。</p>
 
@@ -329,13 +335,14 @@ multires.demo1.win32.exe 854 480
 
 <p>假设设备分辨率是 1280px * 720px，虚拟分辨率是 960pt * 540pt，背景图是 1280px * 800px。要确保背景图 1:1 显示在屏幕上，参考如下代码：</p>
 
-<pre><code>const CCSize&amp; winSize = CCDirector::sharedDirector()-&gt;getWinSize();
+<p><code>cpp 让图片按 1:1 显示在屏幕上
+const CCSize&amp; winSize = CCDirector::sharedDirector()-&gt;getWinSize();
 float scale = CCEGLView::sharedOpenGLView().getScaleX();
-local bg = CCSprite::create("bg.jpg")
+CCSprite* bg = CCSprite::create("bg.jpg")
 bg-&gt;setPosition(ccp(winSize.width / 2, winSize.height / 2));
 bg-&gt;setScale(1.0f / scale); // 这里重置图片缩放比例，确保图片按 1:1 显示在屏幕上
 addChild(bg);
-</code></pre>
+</code></p>
 
 <p>~</p>
 
