@@ -9,7 +9,9 @@
   <meta name="author" content="YuLei Liao">
 
   
-  <meta name="description" content="cocos2d-x 2.0 提供一个极有价值的新特征: setDesignResolutionSize() 。 这个函数用于指定一个 OpenGL 视图，然后将这个视图映射到设备屏幕上。根据不同的设定，视图会自动缩放显示内容，为 cocos2d-x 自适应多种分辨率提供了基本支持。 ">
+  <meta name="description" content="tolua++ 是一个将 C/C++ 的函数和对象导出给 Lua 脚本使用的工具。 使用这个工具的基本步骤： 将要导出的 C/C++ 函数和对象定义写入 .pkg 文件；
+运行 tolua++ 工具，将 .pkg 文件编译为目标 .cpp 文件；
+将目标 .cpp 文件加入项目，在启用 Lua &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -64,6 +66,58 @@
     <div id="content">
       <div class="blog-index">
   
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2012/08/25/tolua-plus-plus-implement/">Tolua++ 实现分析</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2012-08-25T11:05:00+08:00" pubdate data-updated="true">Aug 25<span>th</span>, 2012</time>
+        
+         | <a href="/blog/2012/08/25/tolua-plus-plus-implement/#disqus_thread">Comments</a>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>tolua++ 是一个将 C/C++ 的函数和对象导出给 Lua 脚本使用的工具。</p>
+
+<p>使用这个工具的基本步骤：</p>
+
+<ul>
+<li>将要导出的 C/C++ 函数和对象定义写入 .pkg 文件；</li>
+<li>运行 tolua++ 工具，将 .pkg 文件编译为目标 .cpp 文件；</li>
+<li>将目标 .cpp 文件加入项目，在启用 Lua 虚拟机后调用目标文件中的 open() 函数注册导出的内容。</li>
+</ul>
+
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2012/08/25/tolua-plus-plus-implement/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
   
   
     <article>
@@ -169,6 +223,10 @@
     <section>
   <h1>Recent Posts</h1>
   <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2012/08/25/tolua-plus-plus-implement/">tolua++ 实现分析</a>
+      </li>
     
       <li class="post">
         <a href="/blog/2012/08/17/cocos2d-x-2-dot-0-multi-resolution/">cocos2d-x 2.0 自适应多种分辨率</a>
