@@ -7,11 +7,11 @@ require "stringex"
 ssh_user       = "user@domain.com"
 ssh_port       = "22"
 document_root  = "~/website.com/"
-rsync_delete   = true
-deploy_default = "push"
+rsync_delete   = false
+deploy_default = "rsync"
 
 # This will be configured for you when you run config_deploy
-deploy_branch  = "master"
+deploy_branch  = "gh-pages"
 
 ## -- Misc Configs -- ##
 
@@ -151,7 +151,7 @@ task :new_page, :filename do |t, args|
 end
 
 # usage rake isolate[my-post]
-desc "Move all other posts than the one currently being worked on to a temporary stash location (stash) so regenerating the site happens much quicker."
+desc "Move all other posts than the one currently being worked on to a temporary stash location (stash) so regenerating the site happens much more quickly."
 task :isolate, :filename do |t, args|
   stash_dir = "#{source_dir}/#{stash_dir}"
   FileUtils.mkdir(stash_dir) unless File.exist?(stash_dir)
