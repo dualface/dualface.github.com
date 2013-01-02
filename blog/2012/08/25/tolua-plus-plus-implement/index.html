@@ -1,0 +1,433 @@
+
+<!DOCTYPE HTML>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>tolua++ 实现分析 - 我是妖怪</title>
+	<meta name="author" content="YuLei Liao">
+
+	
+	<meta name="description" content="tolua++ 是一个将 C/C++ 的函数和对象导出给 Lua 脚本使用的工具。 使用这个工具的基本步骤： 将要导出的 C/C++ 函数和对象定义写入 .pkg 文件；
+运行 tolua++ 工具，将 .pkg 文件编译为目标 .cpp 文件；
+将目标 .cpp 文件加入项目，在启用 Lua &hellip;">
+	
+	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+	<link href="/atom.xml" rel="alternate" title="我是妖怪" type="application/atom+xml">
+	<link rel="canonical" href="">
+	<link href="/favicon.png" rel="shortcut icon">
+	<link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+	<!--[if lt IE 9]><script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+	<script src="/javascripts/libs/jquery-1.7.2.min.js"></script>
+	<script src="/javascripts/jquery.tableofcontents.min.js" type="text/javascript"></script>
+	<script src="/javascripts/generate-toc.js" type="text/javascript"></script>
+	
+</head>
+
+
+<body>
+	<header id="header" class="inner"><h1><a href="/">我是妖怪</a></h1>
+<nav id="main-nav"><ul class="main">
+	<li><a href="/">Blog</a></li>
+	<li><a href="/blog/archives">Archives</a></li>
+    <li><a href="http://qeeplay.com/">My Team</a></li>
+</ul>
+</nav>
+<nav id="mobile-nav">
+	<div class="alignleft menu">
+		<a class="button">Menu</a>
+		<div class="container"><ul class="main">
+	<li><a href="/">Blog</a></li>
+	<li><a href="/blog/archives">Archives</a></li>
+    <li><a href="http://qeeplay.com/">My Team</a></li>
+</ul>
+</div>
+	</div>
+	<div class="alignright search">
+		<a class="button"></a>
+		<div class="container">
+			<form action="http://google.com/search" method="get">
+				<input type="text" name="q" results="0">
+				<input type="hidden" name="q" value="site:dualface.github.com">
+			</form>
+		</div>
+	</div>
+</nav>
+<nav id="sub-nav" class="alignright">
+	<div class="social">
+		
+		
+		
+		
+		<a class="github" href="https://github.com/dualface" title="GitHub">GitHub</a>
+		
+    
+		
+		
+		
+		
+		
+		<a class="rss" href="/atom.xml" title="RSS">RSS</a>
+		
+	</div>
+	<form class="search" action="http://google.com/search" method="get">
+		<input class="alignright" type="text" name="q" results="0">
+		<input type="hidden" name="q" value="site:dualface.github.com">
+	</form>
+</nav>
+
+</header>
+	
+		
+	
+	<div id="content" class="inner"><article class="post">
+	<h1 class="title">Tolua++ 实现分析</h1>
+	<div class="entry-content"><p>tolua++ 是一个将 C/C++ 的函数和对象导出给 Lua 脚本使用的工具。</p>
+
+<p>使用这个工具的基本步骤：</p>
+
+<ul>
+<li>将要导出的 C/C++ 函数和对象定义写入 .pkg 文件；</li>
+<li>运行 tolua++ 工具，将 .pkg 文件编译为目标 .cpp 文件；</li>
+<li>将目标 .cpp 文件加入项目，在启用 Lua 虚拟机后调用目标文件中的 open() 函数注册导出的内容。</li>
+</ul>
+
+
+<!--more-->
+
+
+<p>~</p>
+
+<h2>tolua++ 工具生成的目标文件</h2>
+
+<p>每个目标文件都是从一系列 .pkg 文件编译而来，主要完成下列功能：</p>
+
+<ul>
+<li>定义所有从 C/C++ 导出的类型、函数和对象；</li>
+<li>注册所有类型及其方法。</li>
+</ul>
+
+
+<p>~</p>
+
+<h3>定义要导出的方法</h3>
+
+<p>不管是 C 函数还是 C++ 对象的方法，都一律导出为静态函数。</p>
+
+<p>C 函数的导出形式如下：</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+</pre></td><td class='code'><pre><code class='lua'><span class='line'><span class="n">static</span> <span class="n">int</span> <span class="n">tolua_math2dx_luabinding_dist00</span><span class="p">(</span><span class="n">lua_State</span><span class="o">*</span> <span class="n">tolua_S</span><span class="p">)</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="n">tolua_Error</span> <span class="n">tolua_err</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="err">!</span><span class="n">tolua_isnumber</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">)</span> <span class="err">||</span>
+</span><span class='line'>        <span class="err">!</span><span class="n">tolua_isnumber</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">)</span> <span class="err">||</span>
+</span><span class='line'>        <span class="err">!</span><span class="n">tolua_isnumber</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">)</span> <span class="err">||</span>
+</span><span class='line'>        <span class="err">!</span><span class="n">tolua_isnumber</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">4</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">)</span> <span class="err">||</span>
+</span><span class='line'>        <span class="err">!</span><span class="n">tolua_isnoobj</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">5</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">))</span>
+</span><span class='line'>    <span class="p">{</span>
+</span><span class='line'>        <span class="n">goto</span> <span class="n">tolua_lerror</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="k">else</span>
+</span><span class='line'>    <span class="p">{</span>
+</span><span class='line'>        <span class="n">float</span> <span class="n">p1x</span> <span class="o">=</span> <span class="p">(</span><span class="n">float</span><span class="p">)</span><span class="n">tolua_tonumber</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">);</span>
+</span><span class='line'>        <span class="n">float</span> <span class="n">p1y</span> <span class="o">=</span> <span class="p">(</span><span class="n">float</span><span class="p">)</span><span class="n">tolua_tonumber</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">0</span><span class="p">);</span>
+</span><span class='line'>        <span class="n">float</span> <span class="n">p2x</span> <span class="o">=</span> <span class="p">(</span><span class="n">float</span><span class="p">)</span><span class="n">tolua_tonumber</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">0</span><span class="p">);</span>
+</span><span class='line'>        <span class="n">float</span> <span class="n">p2y</span> <span class="o">=</span> <span class="p">(</span><span class="n">float</span><span class="p">)</span><span class="n">tolua_tonumber</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">4</span><span class="p">,</span><span class="mi">0</span><span class="p">);</span>
+</span><span class='line'>        <span class="p">{</span>
+</span><span class='line'>            <span class="n">float</span> <span class="n">tolua_ret</span> <span class="o">=</span> <span class="n">dist</span><span class="p">(</span><span class="n">p1x</span><span class="p">,</span> <span class="n">p1y</span><span class="p">,</span> <span class="n">p2x</span><span class="p">,</span> <span class="n">p2y</span><span class="p">);</span>
+</span><span class='line'>            <span class="n">tolua_pushnumber</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span> <span class="n">tolua_ret</span><span class="p">);</span>
+</span><span class='line'>        <span class="p">}</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="k">return</span> <span class="mi">1</span><span class="p">;</span>
+</span><span class='line'><span class="n">tolua_lerror</span><span class="p">:</span>
+</span><span class='line'>    <span class="n">tolua_error</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="s2">&quot;</span><span class="s">#ferror in function &#39;dist&#39;.&quot;</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">);</span>
+</span><span class='line'>    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>由于这个导出模块的名字是 math2dx_luabinding，所以导出函数的前缀就是 tolua_math2dx_luabinding_ 。而导出函数 dist 的名字也添加了后缀 00 用于区别可能存在的函数重载。</p>
+
+<p>导出函数 dist00() 的执行步骤：</p>
+
+<ol>
+<li>首先从 stack 提取函数的参数，并一一判断类型。如果类型不符，则输出错误信息并中断执行。</li>
+<li>将参数复制到临时变量中，然后调用目标函数 dist()，并将结果（如果 dist() 有返回值）push 到 stack。</li>
+<li>dist00() 最后返回 dist() 函数的返回值的个数。</li>
+</ol>
+
+
+<p>~</p>
+
+<p>对于 C++ 对象，方法则分为类静态方法和实例方法两种情况。</p>
+
+<p>由于 tolua++ 导出的 C++ 类静态方法用“:”操作符调用：</p>
+
+<pre><code>local request = CCHttpRequest:create()
+</code></pre>
+
+<p>因此导出函数里要求传入的第一个参数是 CCHttpRequest 模块：</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+</pre></td><td class='code'><pre><code class='lua'><span class='line'><span class="o">//</span> <span class="n">CCHttpRequest</span><span class="p">:</span><span class="n">create</span><span class="p">()</span>
+</span><span class='line'><span class="n">static</span> <span class="n">int</span> <span class="n">tolua_cocos2dx_extension_network_CCHttpRequest_create00</span><span class="p">(</span><span class="n">lua_State</span><span class="o">*</span> <span class="n">tolua_S</span><span class="p">)</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="n">tolua_Error</span> <span class="n">tolua_err</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="err">!</span><span class="n">tolua_isusertable</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="s2">&quot;</span><span class="s">CCHttpRequest&quot;</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">)</span> <span class="err">||</span>
+</span><span class='line'>        <span class="p">(</span><span class="n">tolua_isvaluenil</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">)</span> <span class="err">||</span>
+</span><span class='line'>            <span class="err">!</span><span class="n">toluafix_isfunction</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="s2">&quot;</span><span class="s">LUA_FUNCTION&quot;</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">))</span> <span class="err">||</span>
+</span><span class='line'>        <span class="err">!</span><span class="n">tolua_isstring</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">)</span> <span class="err">||</span>
+</span><span class='line'>        <span class="err">!</span><span class="n">tolua_isnumber</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">4</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">)</span> <span class="err">||</span>
+</span><span class='line'>        <span class="err">!</span><span class="n">tolua_isnoobj</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">5</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">))</span>
+</span><span class='line'>    <span class="p">{</span>
+</span><span class='line'>        <span class="n">goto</span> <span class="n">tolua_lerror</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="k">else</span>
+</span><span class='line'>    <span class="p">{</span>
+</span><span class='line'>        <span class="n">LUA_FUNCTION</span> <span class="n">listener</span> <span class="o">=</span> <span class="n">toluafix_ref_function</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">0</span><span class="p">);</span>
+</span><span class='line'>        <span class="n">const</span> <span class="n">char</span><span class="o">*</span> <span class="n">url</span> <span class="o">=</span> <span class="p">(</span><span class="n">const</span> <span class="n">char</span><span class="o">*</span><span class="p">)</span><span class="n">tolua_tostring</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">0</span><span class="p">);</span>
+</span><span class='line'>        <span class="n">CCHttpRequestMethod</span> <span class="n">method</span> <span class="o">=</span> <span class="p">(</span><span class="n">CCHttpRequestMethod</span><span class="p">)</span><span class="n">tolua_tonumber</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span>
+</span><span class='line'>                <span class="mi">4</span><span class="p">,</span><span class="n">CCHttpRequestMethodGET</span><span class="p">);</span>
+</span><span class='line'>        <span class="p">{</span>
+</span><span class='line'>            <span class="n">CCHttpRequest</span><span class="o">*</span> <span class="n">tolua_ret</span> <span class="o">=</span> <span class="n">CCHttpRequest</span><span class="p">::</span><span class="n">create</span><span class="p">(</span><span class="n">listener</span><span class="p">,</span><span class="n">url</span><span class="p">,</span><span class="n">method</span><span class="p">);</span>
+</span><span class='line'>            <span class="n">tolua_pushusertype</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,(</span><span class="n">void</span><span class="o">*</span><span class="p">)</span><span class="n">tolua_ret</span><span class="p">,</span><span class="s2">&quot;</span><span class="s">CCHttpRequest&quot;</span><span class="p">);</span>
+</span><span class='line'>        <span class="p">}</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="k">return</span> <span class="mi">1</span><span class="p">;</span>
+</span><span class='line'><span class="n">tolua_lerror</span><span class="p">:</span>
+</span><span class='line'>    <span class="n">tolua_error</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="s2">&quot;</span><span class="s">#ferror in function &#39;create&#39;.&quot;</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">);</span>
+</span><span class='line'>    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>PS: 个人认为将 C++ 对象视为一个 Lua module 时，那么类静态方法的调用方式应该是 CCHttpRequest.create() 这样，以便和实例方法区别开。</p>
+
+<p>实例方法的导出区别不大，仅仅是需要检查 stack 中的第一个值是否是对象实例：</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+</pre></td><td class='code'><pre><code class='lua'><span class='line'><span class="o">//</span> <span class="n">CCHttpRequest</span><span class="p">:</span><span class="n">start</span><span class="p">()</span>
+</span><span class='line'><span class="n">static</span> <span class="n">int</span> <span class="n">tolua_cocos2dx_extension_network_CCHttpRequest_start00</span><span class="p">(</span><span class="n">lua_State</span><span class="o">*</span> <span class="n">tolua_S</span><span class="p">)</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="n">tolua_Error</span> <span class="n">tolua_err</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="err">!</span><span class="n">tolua_isusertype</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="s2">&quot;</span><span class="s">CCHttpRequest&quot;</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">)</span> <span class="err">||</span>
+</span><span class='line'>        <span class="err">!</span><span class="n">tolua_isboolean</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">)</span> <span class="err">||</span>
+</span><span class='line'>        <span class="err">!</span><span class="n">tolua_isnoobj</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">))</span>
+</span><span class='line'>    <span class="p">{</span>
+</span><span class='line'>        <span class="n">goto</span> <span class="n">tolua_lerror</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="k">else</span>
+</span><span class='line'>    <span class="p">{</span>
+</span><span class='line'>        <span class="n">CCHttpRequest</span><span class="o">*</span> <span class="n">self</span> <span class="o">=</span> <span class="p">(</span><span class="n">CCHttpRequest</span><span class="o">*</span><span class="p">)</span><span class="n">tolua_tousertype</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">);</span>
+</span><span class='line'>        <span class="k">if</span> <span class="p">(</span><span class="err">!</span><span class="n">self</span><span class="p">)</span>
+</span><span class='line'>        <span class="p">{</span>
+</span><span class='line'>            <span class="n">tolua_error</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="s2">&quot;</span><span class="s">invalid &#39;self&#39; in function &#39;start&#39;&quot;</span><span class="p">,</span> <span class="n">NULL</span><span class="p">);</span>
+</span><span class='line'>        <span class="p">}</span>
+</span><span class='line'>        <span class="n">bool</span> <span class="n">isCached</span> <span class="o">=</span> <span class="p">(</span><span class="n">bool</span><span class="p">)</span><span class="n">tolua_toboolean</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="kc">false</span><span class="p">);</span>
+</span><span class='line'>        <span class="n">self</span><span class="o">-&gt;</span><span class="n">start</span><span class="p">(</span><span class="n">isCached</span><span class="p">);</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'><span class="n">tolua_lerror</span><span class="p">:</span>
+</span><span class='line'>    <span class="n">tolua_error</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="s2">&quot;</span><span class="s">#ferror in function &#39;start&#39;.&quot;</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">);</span>
+</span><span class='line'>    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>定义完所有要导出的方法后，tolua++ 目标文件将定义所有的模块并注册上述导出的方法。</p>
+
+<p>~</p>
+
+<h3>注册模块和方法</h3>
+
+<p>对于 C 函数，会添加到 Lua 的全局名字空间中，而每一个 C++ 对象，则会注册一个与类名相同的 table，并添加到全局名字空间。</p>
+
+<p>C++ 对象对应的 table 添加后，会将导出的类静态方法和实例方法添加到这个 table。</p>
+
+<p>~</p>
+
+<h2>tolua++ 库</h2>
+
+<p>要想让目标文件正常工作，还需要依赖 tolua++ 库提供的功能。这个库提供下列功能：</p>
+
+<ul>
+<li>push 各种值到 lua stack；</li>
+<li>push 一个对象或结构到 lua stack;</li>
+<li>从 lua stack 取出值或对象等；</li>
+<li>检查 lua stack 中值的类型；</li>
+<li>在 lua 值被回收时删除对象实例。</li>
+</ul>
+
+
+<p>其实这篇文章应该还有不少内容，但我实在是懒得写了。。。原谅我这个程序猿吧 -_-#</p>
+
+<p>因为下一篇文章才是我要说的重点 :)</p>
+
+<p>~</p>
+
+<p>-EOF-</p>
+</div>
+
+
+<div class="meta">
+	<div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2012-08-25T11:05:00+08:00" pubdate data-updated="true">Aug 25<span>th</span>, 2012</time></div>
+	<div class="tags">
+
+
+	<a class='category' href='/blog/categories/lua/'>lua</a>
+
+
+</div>
+	
+		<span class="comments"><a href="/blog/2012/08/25/tolua-plus-plus-implement/#disqus_thread">Comments</a></span>
+	
+</div>
+</article>
+
+	<div class="share">
+	<div class="addthis_toolbox addthis_default_style ">
+	
+	
+	
+	<a class="addthis_counter addthis_pill_style"></a>
+	</div>
+  <script type="text/javascript" src="http://s7.addthis.com/js/250/addthis_widget.js#pubid="></script>
+</div>
+
+
+
+<section id="comment">
+    <h2 class="title">Comments</h2>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+</section>
+</div>
+	<footer id="footer" class="inner">Copyright &copy; 2013
+
+    YuLei Liao
+
+</footer>
+	<script src="/javascripts/slash.js"></script>
+<script src="/javascripts/jquery.fancybox.pack.js"></script>
+<script type="text/javascript">
+(function($){
+	$('.fancybox').fancybox();
+})(jQuery);
+</script> <!-- Delete or comment this line to disable Fancybox -->
+
+
+<script type="text/javascript">
+      var disqus_shortname = 'dualface';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'http://dualface.github.com/blog/2012/08/25/tolua-plus-plus-implement/';
+        var disqus_url = 'http://dualface.github.com/blog/2012/08/25/tolua-plus-plus-implement/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = 'http://' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+
+
+
+
+</body>
+</html>

@@ -1,0 +1,1743 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[我是妖怪]]></title>
+  <link href="http://dualface.github.com/atom.xml" rel="self"/>
+  <link href="http://dualface.github.com/"/>
+  <updated>2013-01-02T15:53:59+08:00</updated>
+  <id>http://dualface.github.com/</id>
+  <author>
+    <name><![CDATA[YuLei Liao]]></name>
+    <email><![CDATA[dualface@gmail.com]]></email>
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[LuaJavaBridge - Lua 与 Java 互操作的简单解决方案]]></title>
+    <link href="http://dualface.github.com/blog/2013/01/01/call-java-from-lua/"/>
+    <updated>2013-01-01T01:01:00+08:00</updated>
+    <id>http://dualface.github.com/blog/2013/01/01/call-java-from-lua</id>
+    <content type="html"><![CDATA[<p>最近在游戏里要集成中国移动的 SDK，而这些 SDK 都是用 Java 编写的。由于我们整个游戏都是使用 Lua 开发的，所以就面对 Lua 与 Java 互操作的问题。</p>
+
+<p>传统做法是先用 C/C++ 借助 JNI（Java Native Interface）编写调用 Java 的接口函数，然后再将这些函数通过 tolua++ 导出给 Lua 使用。这种做法最大的问题就是太繁琐，而且稍微有一点点修改，就要重新编译，严重降低了开发效率。</p>
+
+<p>我尝试写了几个接口函数后，发现 JNI 提供了完善的接口来操作 Java，比如查找特定的 Class、Method 等等。既然有这些东西，我想完全可以实现一个很薄的转接层。这个层会提供一些函数，让 Lua 代码可以直接调用到 Java 的方法。</p>
+
+<p>经过一番努力，LuaJavaBridge（简称 luaj）诞生了。</p>
+
+<!-- more -->
+
+
+<h2>luaj 主要特征</h2>
+
+<ul>
+<li>可以从 Lua 调用 Java Class Static Method</li>
+<li>调用 Java 方法时，支持 int/float/boolean/String 四种参数类型</li>
+<li>支持以用数组的形式，批量传递数据到 Java</li>
+<li>可以将 Lua function 作为参数传递给 Java，并让 Java 保存 Lua function 的引用</li>
+<li>可以从 Java 调用 Lua 的全局函数，或者调用引用指向的 Lua function</li>
+</ul>
+
+
+<p>luaj 的功能很简单，但对于集成各种 SDK 来说已经完全满足需求了。</p>
+
+<h2>luaj 用法示例</h2>
+
+<p>下面的代码是我们游戏中实际使用的中国移动支付 SDK 调用代码，luaj 好不好用一目了然：</p>
+
+<p><strong>Lua 代码:</strong></p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+</pre></td><td class='code'><pre><code class='lua'><span class='line'><span class="cm">--[[</span>
+</span><span class='line'><span class="cm">购买 1000 金币</span>
+</span><span class='line'>
+</span><span class='line'><span class="cm">Java 方法原型:</span>
+</span><span class='line'><span class="cm">public static void GameInterface_doBilling(final String billingIndex,</span>
+</span><span class='line'><span class="cm">        final boolean useSms,</span>
+</span><span class='line'><span class="cm">        final boolean isRepeated,</span>
+</span><span class='line'><span class="cm">        final int luaFunctionId)</span>
+</span><span class='line'><span class="cm">]]</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">-- 用于处理支付结果的函数</span>
+</span><span class='line'><span class="kd">local</span> <span class="k">function</span> <span class="nf">callback</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+</span><span class='line'>    <span class="k">if</span> <span class="n">result</span> <span class="o">==</span> <span class="s2">&quot;</span><span class="s">success&quot;</span> <span class="k">then</span>
+</span><span class='line'>        <span class="n">game</span><span class="p">.</span><span class="n">state</span><span class="p">:</span><span class="n">increaseCoins</span><span class="p">(</span><span class="mi">1000</span><span class="p">)</span>
+</span><span class='line'>        <span class="n">game</span><span class="p">.</span><span class="n">state</span><span class="p">:</span><span class="n">save</span><span class="p">()</span>
+</span><span class='line'>    <span class="k">end</span>
+</span><span class='line'><span class="k">end</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">-- 调用 Java 方法需要的参数</span>
+</span><span class='line'><span class="kd">local</span> <span class="n">args</span> <span class="o">=</span> <span class="p">{</span>
+</span><span class='line'>    <span class="s2">&quot;</span><span class="s">001&quot;</span><span class="p">,</span>          <span class="c1">-- billingIndex</span>
+</span><span class='line'>    <span class="kc">true</span><span class="p">,</span>           <span class="c1">-- useSms</span>
+</span><span class='line'>    <span class="kc">true</span><span class="p">,</span>           <span class="c1">-- isRepeated</span>
+</span><span class='line'>    <span class="n">callback</span>        <span class="c1">-- luaFunctionId</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'><span class="c1">-- Java 类的名称</span>
+</span><span class='line'><span class="kd">local</span> <span class="n">className</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="s">com/qeeplay/frameworks/ChinaMobile_SDK&quot;</span>
+</span><span class='line'><span class="c1">-- 调用 Java 方法</span>
+</span><span class='line'><span class="n">luaj</span><span class="p">.</span><span class="n">callStaticMethod</span><span class="p">(</span><span class="n">className</span><span class="p">,</span> <span class="s2">&quot;</span><span class="s">GameInterface_doBilling&quot;</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>上面的代码就不解释了，注释已经写得非常明白。</p>
+
+<h2>luaj 实现原理</h2>
+
+<p>luaj 的核心目标有两个：从 Lua 调用 Java, 从 Java 调用 Lua。整理出来就是如下几点：</p>
+
+<ul>
+<li>查找并调用指定的 Java 方法</li>
+<li>检查调用结果，并从 Java 方法获取返回值</li>
+<li>将 Lua function 作为参数传递给 Java 方法</li>
+<li>在 Java 方法中调用 Lua function</li>
+</ul>
+
+
+<h3>查找并调用指定的 Java 方法</h3>
+
+<p>JNI 提供了 FindClass() 方法用于查找指定的 Class，所以 luaj.callStaticMethod() 的第一个参数就是要调用的 Java Class 的完整类名称（类名称中的“.”要替换为“/”）。</p>
+
+<p>找到指定 Class 后，利用 JNI 的 GetStaticMethodID() 方法就可以找到这个类的指定静态方法，前提是要提供静态方法的名称和签名。</p>
+
+<p>所谓签名，就是指 Java 方法的参数类型和返回类型定义。例如前面示例代码中 GameInterface_doBilling() 方法的签名是 (Ljava/lang/String;ZZI)V 。关于 Java 方法签名的具体定义，可以参考：<a href="http://docs.oracle.com/javase/7/docs/technotes/guides/jni/spec/types.html#wp16432">JNI Type Signatures</a>。</p>
+
+<p>由于签名有点难懂，而且和 Lua 的类型定义不一致，所以 luaj 可以根据调用参数自动猜测方法签名。示例代码中，luaj.callStaticMethod() 的第二个参数指定了要查找的方法名称，但并没有提供方法的签名，这就是利用了 luaj 的自动猜测签名功能。</p>
+
+<p>示例代码指定参数部分，一共指定了 4 个参数，分别是：字符串、布尔值、布尔值、Lua function。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class='lua'><span class='line'><span class="c1">-- 调用 Java 方法需要的参数</span>
+</span><span class='line'><span class="kd">local</span> <span class="n">args</span> <span class="o">=</span> <span class="p">{</span>
+</span><span class='line'>    <span class="s2">&quot;</span><span class="s">001&quot;</span><span class="p">,</span>          <span class="c1">-- billingIndex</span>
+</span><span class='line'>    <span class="kc">true</span><span class="p">,</span>           <span class="c1">-- useSms</span>
+</span><span class='line'>    <span class="kc">true</span><span class="p">,</span>           <span class="c1">-- isRepeated</span>
+</span><span class='line'>    <span class="n">callback</span>        <span class="c1">-- luaFunctionId</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>luaj 根据这 4 个参数，会创建出 GameInterface_doBilling() 方法的签名。<em>注意 Lua function 是以整数的形式传入 Java 方法，所以 Java 方法的第四个参数是 int 类型）。</em></p>
+
+<p>不幸的是 Lua 里没有办法准确判断一个数值是整数还是浮点数，所以 luaj 假定所有的数值都是浮点数。下面的代码第二个调用就会失败：</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+</pre></td><td class='code'><pre><code class='lua'><span class='line'><span class="kd">local</span> <span class="n">args</span> <span class="o">=</span> <span class="p">{</span><span class="mi">1</span><span class="p">}</span> <span class="c1">-- 生成的方法签名是 (F)V</span>
+</span><span class='line'>
+</span><span class='line'><span class="cm">--[[</span>
+</span><span class='line'><span class="cm">Java 方法原型:</span>
+</span><span class='line'><span class="cm">public static void TestMethod1(final float integerValue)</span>
+</span><span class='line'><span class="cm">]]</span>
+</span><span class='line'><span class="c1">-- 调用成功</span>
+</span><span class='line'><span class="n">luaj</span><span class="p">.</span><span class="n">callStaticMethod</span><span class="p">(</span><span class="n">className</span><span class="p">,</span> <span class="s2">&quot;</span><span class="s">TestMethod1&quot;</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="cm">--[[</span>
+</span><span class='line'><span class="cm">Java 方法原型:</span>
+</span><span class='line'><span class="cm">public static void TestMethod2(final int integerValue)</span>
+</span><span class='line'><span class="cm">]]</span>
+</span><span class='line'><span class="c1">-- 调用失败，正确的方法签名应该是 (I)V</span>
+</span><span class='line'><span class="n">luaj</span><span class="p">.</span><span class="n">callStaticMethod</span><span class="p">(</span><span class="n">className</span><span class="p">,</span> <span class="s2">&quot;</span><span class="s">TestMethod2&quot;</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>为此，luaj 允许开发者指定完整的方法签名。而且除了整数和浮点数的情况，在需要从 Java 方法获得返回值时，也需要开发者指定完整的方法签名。示例代码如下：</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+</pre></td><td class='code'><pre><code class='lua'><span class='line'><span class="kd">local</span> <span class="n">args</span> <span class="o">=</span><span class="p">{</span><span class="s2">&quot;</span><span class="s">StringValue&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">3.14</span><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="cm">--[[</span>
+</span><span class='line'><span class="cm">Java 方法原型:</span>
+</span><span class='line'><span class="cm">public static int TestMethod3(final String stringValue,</span>
+</span><span class='line'><span class="cm">        final int integerValue,</span>
+</span><span class='line'><span class="cm">        final float floatValue)</span>
+</span><span class='line'><span class="cm">]]</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">-- 定义签名</span>
+</span><span class='line'><span class="c1">-- 返回值: [I]nt</span>
+</span><span class='line'><span class="c1">-- 参数: [S]tring, [I]nteger, [F]loat</span>
+</span><span class='line'><span class="kd">local</span> <span class="n">sig</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="s">I(SIF)&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">-- 调用方法并获得返回值</span>
+</span><span class='line'><span class="kd">local</span> <span class="n">ok</span><span class="p">,</span> <span class="n">ret</span> <span class="o">=</span> <span class="n">luaj</span><span class="p">.</span><span class="n">callStaticMethod</span><span class="p">(</span><span class="n">className</span><span class="p">,</span> <span class="s2">&quot;</span><span class="s">TestMethod3&quot;</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">sig</span><span class="p">)</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>为了尽量与 Lua 的习惯保持一致，所以 luaj 指定的方法签名与 Java 的要求有些区别，luaj 会自动完成转换。但 luaj 也支持 Java 风格的方法签名，与上面一段代码功能等同的签名定义如下：</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='lua'><span class='line'><span class="kd">local</span> <span class="n">sig</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="s">(Ljava/lang/String;IF)I&quot;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>~</p>
+
+<h3>检查调用结果，并从 Java 方法获取返回值</h3>
+
+<p>luaj 调用 Java 方法时，可能会出现各种错误，因此 luaj 提供了一种机制让 Lua 调用代码可以确定 Java 方法是否成功调用。</p>
+
+<p>luaj.callStaticMethod() 会返回两个值：</p>
+
+<ul>
+<li>当成功时，第一个值为 true，第二个返回值是 Java 方法的返回值（如果有）。</li>
+<li>当失败时，第一个值为 false，第二个返回值是错误信息。</li>
+</ul>
+
+
+<p>下面的代码展示了如何检查返回结果和获得返回值：</p>
+
+<figure class='code'><figcaption><span>Java 代码</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="kd">public</span> <span class="kd">static</span> <span class="kt">int</span> <span class="nf">AddTwoNumbers</span><span class="o">(</span><span class="kd">final</span> <span class="kt">int</span> <span class="n">number1</span><span class="o">,</span>
+</span><span class='line'>        <span class="kd">final</span> <span class="kt">int</span> <span class="n">number2</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>    <span class="k">return</span> <span class="n">number1</span> <span class="o">+</span> <span class="n">number2</span><span class="o">;</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span>Lua 代码</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class='lua'><span class='line'><span class="kd">local</span> <span class="n">args</span> <span class="o">=</span> <span class="p">{</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">}</span>
+</span><span class='line'><span class="kd">local</span> <span class="n">sig</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="s">I(II)&quot;</span>
+</span><span class='line'><span class="kd">local</span> <span class="n">ok</span><span class="p">,</span> <span class="n">ret</span> <span class="o">=</span> <span class="n">luaj</span><span class="p">.</span><span class="n">callStaticMethod</span><span class="p">(</span><span class="n">className</span><span class="p">,</span> <span class="s2">&quot;</span><span class="s">AddTwoNumbers&quot;</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">sig</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">if</span> <span class="ow">not</span> <span class="n">ok</span> <span class="k">then</span>
+</span><span class='line'>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="s">luaj error:&quot;</span><span class="p">,</span> <span class="n">ret</span><span class="p">)</span>
+</span><span class='line'><span class="k">else</span>
+</span><span class='line'>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="s">ret:&quot;</span><span class="p">,</span> <span class="n">ret</span><span class="p">)</span> <span class="c1">-- 输出 ret: 5</span>
+</span><span class='line'><span class="k">end</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>~</p>
+
+<p>目前，luaj 支持从 Java 方法返回 4 种基本值类型：整数、浮点数、布尔值、字符串。</p>
+
+<p>~</p>
+
+<h3>将 Lua function 作为参数传递给 Java 方法</h3>
+
+<p>很多时候，我们需要一种方法让 Java 代码可以向 Lua 代码传递一些消息。例如在大部分游戏平台的 SDK 中，涉及支付的部分都是异步操作的。在支付操作结束后，Java 代码需要通知 Lua 支付成功与否。</p>
+
+<p>Lua 虚拟机中，Lua function 以值的形式保存。但这个值无法直接给 Java 用，所以 luaj 做了一个 Lua function 引用表。当一个 Lua function 传递给 Java 时，这个 function 对应的值会被存在引用表中，并获得一个唯一的引用 ID （整数）。Java 代码拿到这个引用 ID 后，就可以很方便的调用该 Lua function 了。</p>
+
+<p>回顾最开始的示例代码，GameInterface_doBilling() 函数用于接收 Lua function 的参数就是 int 类型。因为实际传入 Java 函数的值是 Lua function 的引用 Id。</p>
+
+<p>~</p>
+
+<h3>在 Java 方法中调用 Lua function</h3>
+
+<p>在 Java 代码中拿到 Lua function 的引用 ID 后，就可以很方便的调用该 Lua function 了：</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="n">LuaJavaBridge</span><span class="o">.</span><span class="na">callLuaFunctionWithString</span><span class="o">(</span><span class="n">luaFunctionId</span><span class="o">,</span> <span class="s">&quot;hello&quot;</span><span class="o">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>这里出现的 LuaJavaBridge 是 luaj 的 Java 部分定义的工具 class。其中定义的 callLuaFunctionWithString() 方法可以将一个字符串参数传递给指定的 Lua function。</p>
+
+<p>LuaJavaBridge 还提供了 callLuaGlobalFunctionWithString() 方法，可以直接调用 Lua 中指定名字的全局函数。这样可以在没有 Lua function 引用 ID 的情况下和 Lua 代码交互。</p>
+
+<p>由于自己的项目暂时没更多需求，所以目前 luaj 只支持向 Lua function 传递单个字符串参数。</p>
+
+<p>~</p>
+
+<h2>GL 线程和 UI 线程的协调</h2>
+
+<p>cocos2d-x for Android 运行在多线程环境下，所以在 Lua 和 Java 交互时需要注意选择适当的线程。</p>
+
+<p>~</p>
+
+<p>cocos2d-x 在 Android 上以两个线程来运行，分别是负责图像渲染的 GL 线程和负责 Android 系统用户界面的 UI 线程。</p>
+
+<ul>
+<li>在 cocos2d-x 启动后，Lua 代码将由 GL 线程调用，因此从 Lua 中调用的 Java 方法如果涉及到系统用户界面的显示、更新操作，那么就必须让这部分代码切换到 UI 线程上去运行。</li>
+<li>反之亦然，从 Java 调用 Lua 代码时，需要让这个调用在 GL 线程上执行，否则 Lua 代码虽然执行了，但会无法更新 cocos2d-x 内部状态。</li>
+</ul>
+
+
+<p>下面是 GameInterface_doBilling() 方法的主要代码：</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">GameInterface_doBilling</span><span class="o">(</span><span class="kd">final</span> <span class="n">String</span> <span class="n">billingIndex</span><span class="o">,</span>
+</span><span class='line'>    <span class="kd">final</span> <span class="kt">boolean</span> <span class="n">useSms</span><span class="o">,</span>
+</span><span class='line'>    <span class="kd">final</span> <span class="kt">boolean</span> <span class="n">isRepeated</span><span class="o">,</span>
+</span><span class='line'>    <span class="kd">final</span> <span class="kt">int</span> <span class="n">luaFunctionId</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="n">LuaJavaBridge</span><span class="o">.</span><span class="na">retainLuaFunction</span><span class="o">(</span><span class="n">luaFunctionId</span><span class="o">);</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="n">context</span><span class="o">.</span><span class="na">runOnUiThread</span><span class="o">(</span><span class="k">new</span> <span class="n">Runnable</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>    <span class="nd">@Override</span>
+</span><span class='line'>    <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>      <span class="n">GameInterface</span><span class="o">.</span><span class="na">doBilling</span><span class="o">(</span><span class="n">useSms</span><span class="o">,</span> <span class="n">isRepeated</span><span class="o">,</span> <span class="n">billingIndex</span><span class="o">,</span> <span class="k">new</span> <span class="n">BillingCallback</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="o">...</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="nd">@Override</span>
+</span><span class='line'>        <span class="kd">public</span> <span class="kt">void</span> <span class="nf">onBillingSuccess</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>          <span class="n">context</span><span class="o">.</span><span class="na">runOnGLThread</span><span class="o">(</span><span class="k">new</span> <span class="n">Runnable</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>            <span class="nd">@Override</span>
+</span><span class='line'>            <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>              <span class="n">LuaJavaBridge</span><span class="o">.</span><span class="na">callLuaFunctionWithString</span><span class="o">(</span><span class="n">luaFunctionId</span><span class="o">,</span> <span class="s">&quot;success&quot;</span><span class="o">);</span>
+</span><span class='line'>              <span class="n">LuaJavaBridge</span><span class="o">.</span><span class="na">releaseLuaFunction</span><span class="o">(</span><span class="n">luaFunctionId</span><span class="o">);</span>
+</span><span class='line'>            <span class="o">}</span>
+</span><span class='line'>          <span class="o">});</span>
+</span><span class='line'>        <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>        <span class="o">...</span>
+</span><span class='line'>      <span class="o">});</span>
+</span><span class='line'>    <span class="o">}</span>
+</span><span class='line'>  <span class="o">});</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>~</p>
+
+<p>方法中，构造了一个 Runnable 对象，用来包装需要执行的 Java 代码。这个 Runnable 对象被指定运行在 UI 线程上。这样当调用 GameInterface.doBilling() 方法时就可以正确显示出支付界面。</p>
+
+<p>当用户支付成功后，GameInterface.doBilling() 会调用 BillingCallback.onBillingSuccess() 方法。这个方法里构造了另一个 Runnable 对象，包装了调用 Lua function 的代码。</p>
+
+<p>看上去代码不少，实际上就是在两个线程间互相切换。确保 Lua function 跑在 GL 线程，Java 代码跑在 UI 线程。</p>
+
+<p>~</p>
+
+<h3>Lua function 的引用计数器</h3>
+
+<p>Lua 虚拟机具有自动垃圾回收机制。Lua function 既然是值，那么在没有被使用时自然会被回收掉。所以 luaj 提供了 retainLuaFunction() 和 releaseLuaFunction() 两个函数用于增减 Lua function 的引用计数。</p>
+
+<p>将一个 Lua function 以引用 ID 的形式传入 Java 后，如果需要异步调用该 Lua function，那么就必须用 retainLuaFunction() 增加计数器，避免 Lua function 被 Lua 虚拟机回收。而在 Lua function 不再使用后，也应该调用 releaseLuaFunction() 减少计数器。</p>
+
+<p>如果了解 cocos2d-x 中 CCObject 的 autorelease 机制，那么对引用计数应该很熟悉，两者是完全相同的实现机制。</p>
+
+<p>~</p>
+
+<h2>连接第三方 SDK 和 cocos2d-x 的中间层</h2>
+
+<p>虽然 luaj 可以让开发者从 Lua 中直接调用 Java 代码。但大部分第三方 SDK 在初始化时都需要指定当前应用程序的 Activity 对象，并且还要切换不同线程，所以对于大多数第三方 SDK，我们仍然要写一个中间层用于 Lua 和 Java 的交互。</p>
+
+<p>与使用 JNI 做中间层相比，配合 luja 的中间层是使用 Java 来编写的，不但更简单明了，而且处理线程切换也非常简单。</p>
+
+<p>~</p>
+
+<p>要实现一个中间层，只有两个步骤：</p>
+
+<ul>
+<li>实现初始化方法，用于将应用程序的 Activity 对象传入 SDK；</li>
+<li>实现供 luaj 调用的 Java 接口</li>
+</ul>
+
+
+<p>下面就是我们项目中实际用到的<a href="https://gist.github.com/4430966">“中国移动游戏基地和短信支付 SDK”中间层源代码</a>：</p>
+
+<figure class='code'><figcaption><span>“中国移动游戏基地和短信支付 SDK”中间层</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+<span class='line-number'>52</span>
+<span class='line-number'>53</span>
+<span class='line-number'>54</span>
+<span class='line-number'>55</span>
+<span class='line-number'>56</span>
+<span class='line-number'>57</span>
+<span class='line-number'>58</span>
+<span class='line-number'>59</span>
+<span class='line-number'>60</span>
+<span class='line-number'>61</span>
+<span class='line-number'>62</span>
+<span class='line-number'>63</span>
+<span class='line-number'>64</span>
+<span class='line-number'>65</span>
+<span class='line-number'>66</span>
+<span class='line-number'>67</span>
+<span class='line-number'>68</span>
+<span class='line-number'>69</span>
+<span class='line-number'>70</span>
+<span class='line-number'>71</span>
+<span class='line-number'>72</span>
+<span class='line-number'>73</span>
+<span class='line-number'>74</span>
+<span class='line-number'>75</span>
+<span class='line-number'>76</span>
+<span class='line-number'>77</span>
+<span class='line-number'>78</span>
+<span class='line-number'>79</span>
+<span class='line-number'>80</span>
+<span class='line-number'>81</span>
+<span class='line-number'>82</span>
+<span class='line-number'>83</span>
+<span class='line-number'>84</span>
+<span class='line-number'>85</span>
+<span class='line-number'>86</span>
+<span class='line-number'>87</span>
+<span class='line-number'>88</span>
+<span class='line-number'>89</span>
+<span class='line-number'>90</span>
+<span class='line-number'>91</span>
+<span class='line-number'>92</span>
+<span class='line-number'>93</span>
+<span class='line-number'>94</span>
+<span class='line-number'>95</span>
+<span class='line-number'>96</span>
+<span class='line-number'>97</span>
+<span class='line-number'>98</span>
+<span class='line-number'>99</span>
+<span class='line-number'>100</span>
+<span class='line-number'>101</span>
+<span class='line-number'>102</span>
+<span class='line-number'>103</span>
+<span class='line-number'>104</span>
+<span class='line-number'>105</span>
+<span class='line-number'>106</span>
+<span class='line-number'>107</span>
+<span class='line-number'>108</span>
+<span class='line-number'>109</span>
+<span class='line-number'>110</span>
+<span class='line-number'>111</span>
+<span class='line-number'>112</span>
+<span class='line-number'>113</span>
+<span class='line-number'>114</span>
+<span class='line-number'>115</span>
+<span class='line-number'>116</span>
+<span class='line-number'>117</span>
+<span class='line-number'>118</span>
+<span class='line-number'>119</span>
+<span class='line-number'>120</span>
+<span class='line-number'>121</span>
+<span class='line-number'>122</span>
+<span class='line-number'>123</span>
+<span class='line-number'>124</span>
+<span class='line-number'>125</span>
+<span class='line-number'>126</span>
+<span class='line-number'>127</span>
+<span class='line-number'>128</span>
+<span class='line-number'>129</span>
+<span class='line-number'>130</span>
+<span class='line-number'>131</span>
+<span class='line-number'>132</span>
+<span class='line-number'>133</span>
+<span class='line-number'>134</span>
+<span class='line-number'>135</span>
+<span class='line-number'>136</span>
+<span class='line-number'>137</span>
+<span class='line-number'>138</span>
+<span class='line-number'>139</span>
+<span class='line-number'>140</span>
+<span class='line-number'>141</span>
+<span class='line-number'>142</span>
+<span class='line-number'>143</span>
+<span class='line-number'>144</span>
+<span class='line-number'>145</span>
+<span class='line-number'>146</span>
+<span class='line-number'>147</span>
+<span class='line-number'>148</span>
+<span class='line-number'>149</span>
+<span class='line-number'>150</span>
+<span class='line-number'>151</span>
+<span class='line-number'>152</span>
+<span class='line-number'>153</span>
+<span class='line-number'>154</span>
+<span class='line-number'>155</span>
+<span class='line-number'>156</span>
+<span class='line-number'>157</span>
+<span class='line-number'>158</span>
+<span class='line-number'>159</span>
+<span class='line-number'>160</span>
+<span class='line-number'>161</span>
+<span class='line-number'>162</span>
+<span class='line-number'>163</span>
+<span class='line-number'>164</span>
+<span class='line-number'>165</span>
+<span class='line-number'>166</span>
+<span class='line-number'>167</span>
+<span class='line-number'>168</span>
+<span class='line-number'>169</span>
+<span class='line-number'>170</span>
+<span class='line-number'>171</span>
+<span class='line-number'>172</span>
+<span class='line-number'>173</span>
+<span class='line-number'>174</span>
+<span class='line-number'>175</span>
+<span class='line-number'>176</span>
+<span class='line-number'>177</span>
+<span class='line-number'>178</span>
+<span class='line-number'>179</span>
+<span class='line-number'>180</span>
+<span class='line-number'>181</span>
+<span class='line-number'>182</span>
+<span class='line-number'>183</span>
+<span class='line-number'>184</span>
+<span class='line-number'>185</span>
+<span class='line-number'>186</span>
+<span class='line-number'>187</span>
+<span class='line-number'>188</span>
+<span class='line-number'>189</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="kn">package</span> <span class="n">com</span><span class="o">.</span><span class="na">qeeplay</span><span class="o">.</span><span class="na">frameworks</span><span class="o">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="nn">org.cocos2dx.lib.Cocos2dxActivity</span><span class="o">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="kn">import</span> <span class="nn">android.content.Intent</span><span class="o">;</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">android.util.Log</span><span class="o">;</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">cn.emagsoftware.gamebilling.api.GameInterface</span><span class="o">;</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">cn.emagsoftware.gamebilling.api.GameInterface.BillingCallback</span><span class="o">;</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">cn.emagsoftware.gamebilling.api.GameInterface.GameExitCallback</span><span class="o">;</span>
+</span><span class='line'><span class="kn">import</span> <span class="nn">cn.emagsoftware.gamecommunity.api.GameCommunity</span><span class="o">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">public</span> <span class="kd">class</span> <span class="nc">ChinaMobile_SDK</span>
+</span><span class='line'><span class="o">{</span>
+</span><span class='line'>  <span class="kd">private</span> <span class="kd">static</span> <span class="n">Cocos2dxActivity</span> <span class="n">context</span><span class="o">;</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">setContext</span><span class="o">(</span><span class="n">Cocos2dxActivity</span> <span class="n">context_</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>    <span class="n">context</span> <span class="o">=</span> <span class="n">context_</span><span class="o">;</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">GameCommunity_initializeSDK</span><span class="o">(</span><span class="kd">final</span> <span class="n">String</span> <span class="n">appName</span><span class="o">,</span>
+</span><span class='line'>      <span class="kd">final</span> <span class="n">String</span> <span class="n">key</span><span class="o">,</span>
+</span><span class='line'>      <span class="kd">final</span> <span class="n">String</span> <span class="n">secret</span><span class="o">,</span>
+</span><span class='line'>      <span class="kd">final</span> <span class="n">String</span> <span class="n">appId</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>    <span class="n">context</span><span class="o">.</span><span class="na">runOnUiThread</span><span class="o">(</span><span class="k">new</span> <span class="n">Runnable</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>      <span class="nd">@Override</span>
+</span><span class='line'>      <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>        <span class="n">GameCommunity</span><span class="o">.</span><span class="na">initializeSDK</span><span class="o">(</span><span class="n">context</span><span class="o">,</span>
+</span><span class='line'>            <span class="n">appName</span><span class="o">,</span>
+</span><span class='line'>            <span class="n">key</span><span class="o">,</span>
+</span><span class='line'>            <span class="n">secret</span><span class="o">,</span>
+</span><span class='line'>            <span class="n">appId</span><span class="o">,</span>
+</span><span class='line'>            <span class="s">&quot;com.qeeplay.games.killfruitcn&quot;</span><span class="o">);</span>
+</span><span class='line'>      <span class="o">}</span>
+</span><span class='line'>    <span class="o">});</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">GameCommunity_exit</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>    <span class="n">context</span><span class="o">.</span><span class="na">runOnUiThread</span><span class="o">(</span><span class="k">new</span> <span class="n">Runnable</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>      <span class="nd">@Override</span>
+</span><span class='line'>      <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>        <span class="n">GameCommunity</span><span class="o">.</span><span class="na">exit</span><span class="o">();</span>
+</span><span class='line'>      <span class="o">}</span>
+</span><span class='line'>    <span class="o">});</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">GameCommunity_launchGameCommunity</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>    <span class="n">context</span><span class="o">.</span><span class="na">runOnUiThread</span><span class="o">(</span><span class="k">new</span> <span class="n">Runnable</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>      <span class="nd">@Override</span>
+</span><span class='line'>      <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>        <span class="n">GameCommunity</span><span class="o">.</span><span class="na">launchGameCommunity</span><span class="o">(</span><span class="n">context</span><span class="o">);</span>
+</span><span class='line'>      <span class="o">}</span>
+</span><span class='line'>    <span class="o">});</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">GameCommunity_launchGameRecommend</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>    <span class="n">context</span><span class="o">.</span><span class="na">runOnUiThread</span><span class="o">(</span><span class="k">new</span> <span class="n">Runnable</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>      <span class="nd">@Override</span>
+</span><span class='line'>      <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>        <span class="n">GameCommunity</span><span class="o">.</span><span class="na">launchGameRecommend</span><span class="o">(</span><span class="n">context</span><span class="o">);</span>
+</span><span class='line'>      <span class="o">}</span>
+</span><span class='line'>    <span class="o">});</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">GameCommunity_commitScoreWithRank</span><span class="o">(</span>
+</span><span class='line'>      <span class="kd">final</span> <span class="n">String</span> <span class="n">leaderboardId</span><span class="o">,</span>
+</span><span class='line'>      <span class="kd">final</span> <span class="kt">int</span> <span class="n">scoreValue</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>    <span class="n">context</span><span class="o">.</span><span class="na">runOnUiThread</span><span class="o">(</span><span class="k">new</span> <span class="n">Runnable</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>      <span class="nd">@Override</span>
+</span><span class='line'>      <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>        <span class="n">GameCommunity</span><span class="o">.</span><span class="na">commitScoreWithRank</span><span class="o">(</span><span class="n">context</span><span class="o">,</span> <span class="n">leaderboardId</span><span class="o">,</span> <span class="n">scoreValue</span><span class="o">);</span>
+</span><span class='line'>      <span class="o">}</span>
+</span><span class='line'>    <span class="o">});</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// ----------------------------------------</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">GameInterface_initializeApp</span><span class="o">(</span><span class="kd">final</span> <span class="n">String</span> <span class="n">appName</span><span class="o">,</span>
+</span><span class='line'>      <span class="kd">final</span> <span class="n">String</span> <span class="n">cpName</span><span class="o">,</span>
+</span><span class='line'>      <span class="kd">final</span> <span class="n">String</span> <span class="n">tel</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>    <span class="n">GameInterface</span><span class="o">.</span><span class="na">initializeApp</span><span class="o">(</span><span class="n">context</span><span class="o">,</span> <span class="n">appName</span><span class="o">,</span> <span class="n">cpName</span><span class="o">,</span> <span class="n">tel</span><span class="o">);</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">GameInterface_doBilling</span><span class="o">(</span><span class="kd">final</span> <span class="n">String</span> <span class="n">billingIndex</span><span class="o">,</span>
+</span><span class='line'>      <span class="kd">final</span> <span class="kt">boolean</span> <span class="n">useSms</span><span class="o">,</span>
+</span><span class='line'>      <span class="kd">final</span> <span class="kt">boolean</span> <span class="n">isRepeated</span><span class="o">,</span>
+</span><span class='line'>      <span class="kd">final</span> <span class="kt">int</span> <span class="n">luaFunctionId</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>    <span class="n">LuaJavaBridge</span><span class="o">.</span><span class="na">retainLuaFunction</span><span class="o">(</span><span class="n">luaFunctionId</span><span class="o">);</span>
+</span><span class='line'>    <span class="n">context</span><span class="o">.</span><span class="na">runOnUiThread</span><span class="o">(</span><span class="k">new</span> <span class="n">Runnable</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>      <span class="nd">@Override</span>
+</span><span class='line'>      <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>        <span class="n">GameInterface</span><span class="o">.</span><span class="na">doBilling</span><span class="o">(</span><span class="n">useSms</span><span class="o">,</span> <span class="n">isRepeated</span><span class="o">,</span> <span class="n">billingIndex</span><span class="o">,</span> <span class="k">new</span> <span class="n">BillingCallback</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>          <span class="nd">@Override</span>
+</span><span class='line'>          <span class="kd">public</span> <span class="kt">void</span> <span class="nf">onUserOperCancel</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>            <span class="n">context</span><span class="o">.</span><span class="na">runOnGLThread</span><span class="o">(</span><span class="k">new</span> <span class="n">Runnable</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>              <span class="nd">@Override</span>
+</span><span class='line'>              <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>                <span class="n">LuaJavaBridge</span><span class="o">.</span><span class="na">callLuaFunctionWithString</span><span class="o">(</span><span class="n">luaFunctionId</span><span class="o">,</span> <span class="s">&quot;cancel&quot;</span><span class="o">);</span>
+</span><span class='line'>                <span class="n">LuaJavaBridge</span><span class="o">.</span><span class="na">releaseLuaFunction</span><span class="o">(</span><span class="n">luaFunctionId</span><span class="o">);</span>
+</span><span class='line'>              <span class="o">}</span>
+</span><span class='line'>            <span class="o">});</span>
+</span><span class='line'>          <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>          <span class="nd">@Override</span>
+</span><span class='line'>          <span class="kd">public</span> <span class="kt">void</span> <span class="nf">onBillingSuccess</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>            <span class="n">context</span><span class="o">.</span><span class="na">runOnGLThread</span><span class="o">(</span><span class="k">new</span> <span class="n">Runnable</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>              <span class="nd">@Override</span>
+</span><span class='line'>              <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>                <span class="n">LuaJavaBridge</span><span class="o">.</span><span class="na">callLuaFunctionWithString</span><span class="o">(</span><span class="n">luaFunctionId</span><span class="o">,</span> <span class="s">&quot;success&quot;</span><span class="o">);</span>
+</span><span class='line'>                <span class="n">LuaJavaBridge</span><span class="o">.</span><span class="na">releaseLuaFunction</span><span class="o">(</span><span class="n">luaFunctionId</span><span class="o">);</span>
+</span><span class='line'>              <span class="o">}</span>
+</span><span class='line'>            <span class="o">});</span>
+</span><span class='line'>          <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>          <span class="nd">@Override</span>
+</span><span class='line'>          <span class="kd">public</span> <span class="kt">void</span> <span class="nf">onBillingFail</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>            <span class="n">context</span><span class="o">.</span><span class="na">runOnGLThread</span><span class="o">(</span><span class="k">new</span> <span class="n">Runnable</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>              <span class="nd">@Override</span>
+</span><span class='line'>              <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>                <span class="n">LuaJavaBridge</span><span class="o">.</span><span class="na">callLuaFunctionWithString</span><span class="o">(</span><span class="n">luaFunctionId</span><span class="o">,</span> <span class="s">&quot;fail&quot;</span><span class="o">);</span>
+</span><span class='line'>                <span class="n">LuaJavaBridge</span><span class="o">.</span><span class="na">releaseLuaFunction</span><span class="o">(</span><span class="n">luaFunctionId</span><span class="o">);</span>
+</span><span class='line'>              <span class="o">}</span>
+</span><span class='line'>            <span class="o">});</span>
+</span><span class='line'>          <span class="o">}</span>
+</span><span class='line'>        <span class="o">});</span>
+</span><span class='line'>      <span class="o">}</span>
+</span><span class='line'>    <span class="o">});</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">GameInterface_setActivateFlag</span><span class="o">(</span><span class="kd">final</span> <span class="n">String</span> <span class="n">billingIndex</span><span class="o">,</span>
+</span><span class='line'>      <span class="kt">boolean</span> <span class="n">flag</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>    <span class="n">GameInterface</span><span class="o">.</span><span class="na">setActivateFlag</span><span class="o">(</span><span class="n">billingIndex</span><span class="o">,</span> <span class="n">flag</span><span class="o">);</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="kd">public</span> <span class="kd">static</span> <span class="kt">boolean</span> <span class="nf">GameInterface_getActivateFlag</span><span class="o">(</span><span class="kd">final</span> <span class="n">String</span> <span class="n">billingIndex</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>    <span class="k">return</span> <span class="n">GameInterface</span><span class="o">.</span><span class="na">getActivateFlag</span><span class="o">(</span><span class="n">billingIndex</span><span class="o">);</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="kd">public</span> <span class="kd">static</span> <span class="kt">boolean</span> <span class="nf">GameInterface_isMusicEnabled</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>    <span class="k">return</span> <span class="n">GameInterface</span><span class="o">.</span><span class="na">isMusicEnabled</span><span class="o">();</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">GameInterface_viewMoreGames</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>    <span class="n">context</span><span class="o">.</span><span class="na">runOnUiThread</span><span class="o">(</span><span class="k">new</span> <span class="n">Runnable</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>      <span class="nd">@Override</span>
+</span><span class='line'>      <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>        <span class="n">GameInterface</span><span class="o">.</span><span class="na">viewMoreGames</span><span class="o">(</span><span class="n">context</span><span class="o">);</span>
+</span><span class='line'>      <span class="o">}</span>
+</span><span class='line'>    <span class="o">});</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">GameInterface_exit</span><span class="o">(</span><span class="kd">final</span> <span class="kt">int</span> <span class="n">luaFunctionId</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>    <span class="n">LuaJavaBridge</span><span class="o">.</span><span class="na">retainLuaFunction</span><span class="o">(</span><span class="n">luaFunctionId</span><span class="o">);</span>
+</span><span class='line'>    <span class="n">context</span><span class="o">.</span><span class="na">runOnUiThread</span><span class="o">(</span><span class="k">new</span> <span class="n">Runnable</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>      <span class="nd">@Override</span>
+</span><span class='line'>      <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>        <span class="n">GameInterface</span><span class="o">.</span><span class="na">exit</span><span class="o">(</span><span class="k">new</span> <span class="n">GameExitCallback</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>          <span class="nd">@Override</span>
+</span><span class='line'>          <span class="kd">public</span> <span class="kt">void</span> <span class="nf">onConfirmExit</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>            <span class="n">context</span><span class="o">.</span><span class="na">runOnGLThread</span><span class="o">(</span><span class="k">new</span> <span class="n">Runnable</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>              <span class="nd">@Override</span>
+</span><span class='line'>              <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>                <span class="n">LuaJavaBridge</span><span class="o">.</span><span class="na">callLuaFunctionWithString</span><span class="o">(</span><span class="n">luaFunctionId</span><span class="o">,</span> <span class="s">&quot;exit&quot;</span><span class="o">);</span>
+</span><span class='line'>                <span class="n">LuaJavaBridge</span><span class="o">.</span><span class="na">releaseLuaFunction</span><span class="o">(</span><span class="n">luaFunctionId</span><span class="o">);</span>
+</span><span class='line'>                <span class="n">context</span><span class="o">.</span><span class="na">runOnUiThread</span><span class="o">(</span><span class="k">new</span> <span class="n">Runnable</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>                  <span class="nd">@Override</span>
+</span><span class='line'>                  <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>                    <span class="n">System</span><span class="o">.</span><span class="na">exit</span><span class="o">(</span><span class="mi">0</span><span class="o">);</span>
+</span><span class='line'>                  <span class="o">}</span>
+</span><span class='line'>                <span class="o">});</span>
+</span><span class='line'>              <span class="o">}</span>
+</span><span class='line'>            <span class="o">});</span>
+</span><span class='line'>          <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>          <span class="nd">@Override</span>
+</span><span class='line'>          <span class="kd">public</span> <span class="kt">void</span> <span class="nf">onCancelExit</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>            <span class="n">context</span><span class="o">.</span><span class="na">runOnGLThread</span><span class="o">(</span><span class="k">new</span> <span class="n">Runnable</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>              <span class="nd">@Override</span>
+</span><span class='line'>              <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>                <span class="n">LuaJavaBridge</span><span class="o">.</span><span class="na">callLuaFunctionWithString</span><span class="o">(</span><span class="n">luaFunctionId</span><span class="o">,</span> <span class="s">&quot;cancel&quot;</span><span class="o">);</span>
+</span><span class='line'>                <span class="n">LuaJavaBridge</span><span class="o">.</span><span class="na">releaseLuaFunction</span><span class="o">(</span><span class="n">luaFunctionId</span><span class="o">);</span>
+</span><span class='line'>              <span class="o">}</span>
+</span><span class='line'>            <span class="o">});</span>
+</span><span class='line'>          <span class="o">}</span>
+</span><span class='line'>        <span class="o">});</span>
+</span><span class='line'>      <span class="o">}</span>
+</span><span class='line'>    <span class="o">});</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>~</p>
+
+<p>SDK 需要传入当前程序的 Activity，所以需要在游戏的 onCreate() 中调用 setContext() ：</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="kd">public</span> <span class="kd">class</span> <span class="nc">mygame</span> <span class="kd">extends</span> <span class="n">Cocos2dxActivity</span> <span class="o">{</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="kd">protected</span> <span class="kt">void</span> <span class="nf">onCreate</span><span class="o">(</span><span class="n">Bundle</span> <span class="n">savedInstanceState</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>    <span class="n">ChinaMobile_SDK</span><span class="o">.</span><span class="na">setContext</span><span class="o">(</span><span class="k">this</span><span class="o">);</span> <span class="c1">// init sdk</span>
+</span><span class='line'>    <span class="kd">super</span><span class="o">.</span><span class="na">onCreate</span><span class="o">(</span><span class="n">savedInstanceState</span><span class="o">);</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="o">...</span>
+</span><span class='line'>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>~</p>
+
+<p>做好一切准备工作后，在游戏的 Lua 代码里访问 SDK 功能就很简单了：</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+</pre></td><td class='code'><pre><code class='lua'><span class='line'><span class="kd">local</span> <span class="n">luaj</span> <span class="o">=</span> <span class="nb">require</span><span class="p">(</span><span class="s2">&quot;</span><span class="s">luaj&quot;</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">local</span> <span class="n">className</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="s">com/qeeplay/frameworks/ChinaMobile_SDK&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">-- 初始化 SDK</span>
+</span><span class='line'><span class="kd">local</span> <span class="n">args</span> <span class="o">=</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">CHINA_MOBILE_SP_APP_NAME</span><span class="p">,</span>
+</span><span class='line'>  <span class="n">CHINA_MOBILE_SP_CP_NAME</span><span class="p">,</span>
+</span><span class='line'>  <span class="n">CHINA_MOBILE_SP_TEL</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'><span class="n">luaj</span><span class="p">.</span><span class="n">callStaticMethod</span><span class="p">(</span><span class="n">className</span><span class="p">,</span> <span class="s2">&quot;</span><span class="s">GameInterface_initializeApp&quot;</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">-- 支付</span>
+</span><span class='line'><span class="kd">local</span> <span class="k">function</span> <span class="nf">callback</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+</span><span class='line'>  <span class="k">if</span> <span class="n">result</span> <span class="o">==</span> <span class="s2">&quot;</span><span class="s">success&quot;</span> <span class="k">then</span>
+</span><span class='line'>    <span class="c1">-- 支付成功</span>
+</span><span class='line'>  <span class="k">end</span>
+</span><span class='line'><span class="k">end</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">local</span> <span class="n">args</span> <span class="o">=</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">billingIndex</span><span class="p">,</span>
+</span><span class='line'>  <span class="kc">true</span><span class="p">,</span>
+</span><span class='line'>  <span class="kc">true</span><span class="p">,</span>
+</span><span class='line'>  <span class="n">callback</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'><span class="n">luaj</span><span class="p">.</span><span class="n">callStaticMethod</span><span class="p">(</span><span class="n">className</span><span class="p">,</span> <span class="s2">&quot;</span><span class="s">GameInterface_doBilling&quot;</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">-- 显示游戏基地界面</span>
+</span><span class='line'><span class="n">luaj</span><span class="p">.</span><span class="n">callStaticMethod</span><span class="p">(</span><span class="n">className</span><span class="p">,</span> <span class="s2">&quot;</span><span class="s">GameCommunity_launchGameCommunity&quot;</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">-- 提交玩家的游戏成绩</span>
+</span><span class='line'><span class="kd">local</span> <span class="n">args</span> <span class="o">=</span> <span class="p">{</span>
+</span><span class='line'>  <span class="s2">&quot;</span><span class="s">0&quot;</span><span class="p">,</span>            <span class="c1">-- 排行榜Id</span>
+</span><span class='line'>  <span class="n">newBestScores</span><span class="p">,</span>  <span class="c1">-- 新的最佳成绩</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'><span class="kd">local</span> <span class="n">sig</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="s">V(SI)&quot;</span>
+</span><span class='line'><span class="n">luaj</span><span class="p">.</span><span class="n">callStaticMethod</span><span class="p">(</span><span class="n">className</span><span class="p">,</span> <span class="s2">&quot;</span><span class="s">GameCommunity_commitScoreWithRank&quot;</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">sig</span><span class="p">)</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>~</p>
+
+<h2>安装 luaj</h2>
+
+<p>luaj 分为三个部分：</p>
+
+<ul>
+<li>LuaJavaBridge.java, com_qeeplay_frameworks_LuaJavaBridge.h/.cpp - 供 Java 端使用的工具类。</li>
+<li>LuaJavaBridge.h/.cpp - 供 Lua 端使用的工具类。</li>
+<li>luaj.lua - LuaJavaBridge 的 Lua 包装，提供更简单和灵活的接口。</li>
+</ul>
+
+
+<p>步骤：</p>
+
+<ul>
+<li>将 LuaJavaBridge.java 添加到 Android 项目中；</li>
+<li>修改 proj.android/jni/Android.mk：</li>
+</ul>
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='makefile'><span class='line'><span class="nv">LOCAL_SRC_FILES</span> <span class="o">:=</span> ...
+</span><span class='line'>    luaj/jni/com_qeeplay_frameworks_LuaJavaBridge.cpp <span class="se">\</span>
+</span><span class='line'>    luaj/luabinding/LuaJavaBridge.cpp
+</span><span class='line'>
+</span><span class='line'>LOCAL_C_INCLUDES :<span class="o">=</span> ...
+</span><span class='line'>    luaj
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li>修改 AppDelegate.cpp，加入以下代码：</li>
+</ul>
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+</pre></td><td class='code'><pre><code class='makefile'><span class='line'><span class="c">#if (CC_TARGET_PLATFORM == CC_PLATFORM_ANDROID)</span>
+</span><span class='line'><span class="c">#include &quot;LuaJavaBridge.h&quot;</span>
+</span><span class='line'><span class="c">#endif</span>
+</span><span class='line'>
+</span><span class='line'><span class="nf">bool AppDelegate</span><span class="o">::</span><span class="m">applicationDidFinishLaunching()</span>
+</span><span class='line'><span class="err">{</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="err">...</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nf">CCLuaEngine* pEngine = CCLuaEngine</span><span class="o">::</span><span class="m">defaultEngine();</span>
+</span><span class='line'>  CCScriptEngineManager::sharedManager<span class="o">()</span>-&gt;setScriptEngine<span class="o">(</span>pEngine<span class="o">)</span>;
+</span><span class='line'>
+</span><span class='line'>  LuaJavaBridge_luabinding_open<span class="o">(</span>pEngine-&gt;getLuaState<span class="o">())</span>;
+</span><span class='line'>
+</span><span class='line'>  ...
+</span><span class='line'><span class="err">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<ul>
+<li>修改proj.android/jni/hellocpp/main.cpp，加入以下代码：</li>
+</ul>
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class='c++'><span class='line'><span class="n">jint</span> <span class="n">JNI_OnLoad</span><span class="p">(</span><span class="n">JavaVM</span> <span class="o">*</span><span class="n">vm</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">reserved</span><span class="p">)</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="p">...</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="n">LuaJavaBridge_setJavaVM</span><span class="p">(</span><span class="n">vm</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">return</span> <span class="n">JNI_VERSION_1_4</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>~</p>
+
+<h2>luaj 方法参考</h2>
+
+<ul>
+<li><p><code>[Lua] luaj.callStaticMethod(className, methodName, args, methodSig)</code></p>
+
+<p>调用指定的 Java class static method，允许传入 int/float/boolean/string/function 五种类型的参数。</p></li>
+<li><p><code>[Lua] luaj.callStaticMethodWithArray(className, methodName, array)</code></p>
+
+<p>将一个 Lua table 数组转换为 Java 的 Vector 集合，并传入被调用的函数。适合批量传递数据给 Java。数组中值的支持 int/float/boolean/string 四种类型。</p>
+
+<p>callStaticMethodWithArray() 要求 Java 方法必须定义为 GetArray() 的形式（方法名随意）：只有一个 Vector 类型的参数，并返回 int 值。</p>
+
+<p>用法：</p></li>
+</ul>
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='lua'><span class='line'><span class="kd">local</span> <span class="n">array</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;</span><span class="s">stringValue&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">3.14</span><span class="p">,</span> <span class="kc">true</span><span class="p">}</span>
+</span><span class='line'><span class="kd">local</span> <span class="n">ok</span><span class="p">,</span> <span class="n">ret</span> <span class="o">=</span> <span class="n">luaj</span><span class="p">.</span><span class="n">callStaticMethodWithArray</span><span class="p">(</span><span class="n">className</span><span class="p">,</span> <span class="s2">&quot;</span><span class="s">GetArray&quot;</span><span class="p">,</span> <span class="n">array</span><span class="p">)</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="kd">public</span> <span class="kd">static</span> <span class="kt">int</span> <span class="nf">GetArray</span><span class="o">(</span><span class="n">Vector</span> <span class="n">vector</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>  <span class="k">for</span> <span class="o">(</span><span class="n">Enumeration</span> <span class="n">e</span> <span class="o">=</span> <span class="n">hash</span><span class="o">.</span><span class="na">keys</span><span class="o">();</span> <span class="n">e</span><span class="o">.</span><span class="na">hasMoreElements</span><span class="o">();)</span>
+</span><span class='line'>  <span class="o">{</span>
+</span><span class='line'>    <span class="n">String</span> <span class="n">key</span> <span class="o">=</span> <span class="o">(</span><span class="n">String</span><span class="o">)</span><span class="n">e</span><span class="o">.</span><span class="na">nextElement</span><span class="o">();</span>
+</span><span class='line'>    <span class="n">Log</span><span class="o">.</span><span class="na">d</span><span class="o">(</span><span class="s">&quot;testWithHash&quot;</span><span class="o">,</span> <span class="s">&quot;  [&quot;</span> <span class="o">+</span> <span class="n">key</span> <span class="o">+</span> <span class="s">&quot;] = &quot;</span> <span class="o">+</span> <span class="n">hash</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="n">key</span><span class="o">).</span><span class="na">toString</span><span class="o">());</span>
+</span><span class='line'>  <span class="o">}</span>
+</span><span class='line'>  <span class="k">return</span> <span class="mi">0</span><span class="o">;</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>~</p>
+
+<ul>
+<li><p><code>[Java] LuaJavaBridge.callLuaFunctionWithString(int luaFunctionId, String value)</code></p>
+
+<p>调用引用 ID 指向的 Lua function，并传入一个字符串作为参数。</p></li>
+<li><p><code>[Java] LuaJavaBridge.callLuaGlobalFunctionWithString(int luaFunctionId, String value)</code></p>
+
+<p>调用指定名字的 Lua 全局函数，并传入一个字符串作为参数。</p></li>
+<li><p><code>[Java] LuaJavaBridge.retainLuaFunction(int luaFunctionId)</code></p>
+
+<p>增加引用 ID 的计数，确保 Lua function 不会被 Lua 虚拟机自动回收。</p></li>
+<li><p><code>[Java] LuaJavaBridge.releaseLuaFunction(int luaFunctionId)</code></p>
+
+<p>减少引用 ID 的计数，当计数等于 0 时，引用 ID 指向的 Lua function 将被回收。</p></li>
+</ul>
+
+
+<p>~</p>
+
+<h2>未来改进</h2>
+
+<p>因为我们自己的项目暂时还没有更复杂的需求，所以 luaj 目前的实现很简单。但要在这个基础上进行完善是很容易的事情，luaj 已经解决了几个关键性问题。</p>
+
+<p>未来计划会增加的主要特性就是支持更多的类型，例如将一个以字符串做键的 Lua table 以 Java Map 集合的形式传递给 Java。同样，从 Java 调用 Lua 函数时，也应该支持多个参数，以及更多的参数类型。</p>
+
+<p>至于将 Java 对象传入 Lua，并在 Lua 中调用 Java 对象的方法，目前没这个打算。因为 luaj 的主要目的是为 cocos2d-x 游戏服务，而 cocos2d-x 的多线程模式要求 Lua 和 Java 代码必须在不同的线程里运行。如果在 Lua 中调用 Java 对象方法将面对许多复杂的问题。与其花大量时间去解决这个问题（还不一定能保证最后简单易用），不如简单写一个中间层。</p>
+
+<p>最后，luaj 已经被集成到了 quick-cocos2d-x 这个基于 cocos2d-x 的快速游戏开发引擎中。quick-cocos2d-x 让开发者可以使用 Lua 语言开发一个完整的大型商业游戏，同时又保持 cocos2d-x 的高性能、开放性、可扩展能力。</p>
+
+<p>最后的最后，惯例为广大程序猿送上福利美图一张 :-)</p>
+
+<p><img src="http://dualface.github.com/upload/2013-01/2013-01-01.jpg" alt="" /></p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[tolua++ 实现分析]]></title>
+    <link href="http://dualface.github.com/blog/2012/08/25/tolua-plus-plus-implement/"/>
+    <updated>2012-08-25T11:05:00+08:00</updated>
+    <id>http://dualface.github.com/blog/2012/08/25/tolua-plus-plus-implement</id>
+    <content type="html"><![CDATA[<p>tolua++ 是一个将 C/C++ 的函数和对象导出给 Lua 脚本使用的工具。</p>
+
+<p>使用这个工具的基本步骤：</p>
+
+<ul>
+<li>将要导出的 C/C++ 函数和对象定义写入 .pkg 文件；</li>
+<li>运行 tolua++ 工具，将 .pkg 文件编译为目标 .cpp 文件；</li>
+<li>将目标 .cpp 文件加入项目，在启用 Lua 虚拟机后调用目标文件中的 open() 函数注册导出的内容。</li>
+</ul>
+
+
+<!--more-->
+
+
+<p>~</p>
+
+<h2>tolua++ 工具生成的目标文件</h2>
+
+<p>每个目标文件都是从一系列 .pkg 文件编译而来，主要完成下列功能：</p>
+
+<ul>
+<li>定义所有从 C/C++ 导出的类型、函数和对象；</li>
+<li>注册所有类型及其方法。</li>
+</ul>
+
+
+<p>~</p>
+
+<h3>定义要导出的方法</h3>
+
+<p>不管是 C 函数还是 C++ 对象的方法，都一律导出为静态函数。</p>
+
+<p>C 函数的导出形式如下：</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+</pre></td><td class='code'><pre><code class='lua'><span class='line'><span class="n">static</span> <span class="n">int</span> <span class="n">tolua_math2dx_luabinding_dist00</span><span class="p">(</span><span class="n">lua_State</span><span class="o">*</span> <span class="n">tolua_S</span><span class="p">)</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="n">tolua_Error</span> <span class="n">tolua_err</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="err">!</span><span class="n">tolua_isnumber</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">)</span> <span class="err">||</span>
+</span><span class='line'>        <span class="err">!</span><span class="n">tolua_isnumber</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">)</span> <span class="err">||</span>
+</span><span class='line'>        <span class="err">!</span><span class="n">tolua_isnumber</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">)</span> <span class="err">||</span>
+</span><span class='line'>        <span class="err">!</span><span class="n">tolua_isnumber</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">4</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">)</span> <span class="err">||</span>
+</span><span class='line'>        <span class="err">!</span><span class="n">tolua_isnoobj</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">5</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">))</span>
+</span><span class='line'>    <span class="p">{</span>
+</span><span class='line'>        <span class="n">goto</span> <span class="n">tolua_lerror</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="k">else</span>
+</span><span class='line'>    <span class="p">{</span>
+</span><span class='line'>        <span class="n">float</span> <span class="n">p1x</span> <span class="o">=</span> <span class="p">(</span><span class="n">float</span><span class="p">)</span><span class="n">tolua_tonumber</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">);</span>
+</span><span class='line'>        <span class="n">float</span> <span class="n">p1y</span> <span class="o">=</span> <span class="p">(</span><span class="n">float</span><span class="p">)</span><span class="n">tolua_tonumber</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">0</span><span class="p">);</span>
+</span><span class='line'>        <span class="n">float</span> <span class="n">p2x</span> <span class="o">=</span> <span class="p">(</span><span class="n">float</span><span class="p">)</span><span class="n">tolua_tonumber</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">0</span><span class="p">);</span>
+</span><span class='line'>        <span class="n">float</span> <span class="n">p2y</span> <span class="o">=</span> <span class="p">(</span><span class="n">float</span><span class="p">)</span><span class="n">tolua_tonumber</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">4</span><span class="p">,</span><span class="mi">0</span><span class="p">);</span>
+</span><span class='line'>        <span class="p">{</span>
+</span><span class='line'>            <span class="n">float</span> <span class="n">tolua_ret</span> <span class="o">=</span> <span class="n">dist</span><span class="p">(</span><span class="n">p1x</span><span class="p">,</span> <span class="n">p1y</span><span class="p">,</span> <span class="n">p2x</span><span class="p">,</span> <span class="n">p2y</span><span class="p">);</span>
+</span><span class='line'>            <span class="n">tolua_pushnumber</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span> <span class="n">tolua_ret</span><span class="p">);</span>
+</span><span class='line'>        <span class="p">}</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="k">return</span> <span class="mi">1</span><span class="p">;</span>
+</span><span class='line'><span class="n">tolua_lerror</span><span class="p">:</span>
+</span><span class='line'>    <span class="n">tolua_error</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="s2">&quot;</span><span class="s">#ferror in function &#39;dist&#39;.&quot;</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">);</span>
+</span><span class='line'>    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>由于这个导出模块的名字是 math2dx_luabinding，所以导出函数的前缀就是 tolua_math2dx_luabinding_ 。而导出函数 dist 的名字也添加了后缀 00 用于区别可能存在的函数重载。</p>
+
+<p>导出函数 dist00() 的执行步骤：</p>
+
+<ol>
+<li>首先从 stack 提取函数的参数，并一一判断类型。如果类型不符，则输出错误信息并中断执行。</li>
+<li>将参数复制到临时变量中，然后调用目标函数 dist()，并将结果（如果 dist() 有返回值）push 到 stack。</li>
+<li>dist00() 最后返回 dist() 函数的返回值的个数。</li>
+</ol>
+
+
+<p>~</p>
+
+<p>对于 C++ 对象，方法则分为类静态方法和实例方法两种情况。</p>
+
+<p>由于 tolua++ 导出的 C++ 类静态方法用“:”操作符调用：</p>
+
+<pre><code>local request = CCHttpRequest:create()
+</code></pre>
+
+<p>因此导出函数里要求传入的第一个参数是 CCHttpRequest 模块：</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+</pre></td><td class='code'><pre><code class='lua'><span class='line'><span class="o">//</span> <span class="n">CCHttpRequest</span><span class="p">:</span><span class="n">create</span><span class="p">()</span>
+</span><span class='line'><span class="n">static</span> <span class="n">int</span> <span class="n">tolua_cocos2dx_extension_network_CCHttpRequest_create00</span><span class="p">(</span><span class="n">lua_State</span><span class="o">*</span> <span class="n">tolua_S</span><span class="p">)</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="n">tolua_Error</span> <span class="n">tolua_err</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="err">!</span><span class="n">tolua_isusertable</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="s2">&quot;</span><span class="s">CCHttpRequest&quot;</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">)</span> <span class="err">||</span>
+</span><span class='line'>        <span class="p">(</span><span class="n">tolua_isvaluenil</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">)</span> <span class="err">||</span>
+</span><span class='line'>            <span class="err">!</span><span class="n">toluafix_isfunction</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="s2">&quot;</span><span class="s">LUA_FUNCTION&quot;</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">))</span> <span class="err">||</span>
+</span><span class='line'>        <span class="err">!</span><span class="n">tolua_isstring</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">)</span> <span class="err">||</span>
+</span><span class='line'>        <span class="err">!</span><span class="n">tolua_isnumber</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">4</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">)</span> <span class="err">||</span>
+</span><span class='line'>        <span class="err">!</span><span class="n">tolua_isnoobj</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">5</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">))</span>
+</span><span class='line'>    <span class="p">{</span>
+</span><span class='line'>        <span class="n">goto</span> <span class="n">tolua_lerror</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="k">else</span>
+</span><span class='line'>    <span class="p">{</span>
+</span><span class='line'>        <span class="n">LUA_FUNCTION</span> <span class="n">listener</span> <span class="o">=</span> <span class="n">toluafix_ref_function</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">0</span><span class="p">);</span>
+</span><span class='line'>        <span class="n">const</span> <span class="n">char</span><span class="o">*</span> <span class="n">url</span> <span class="o">=</span> <span class="p">(</span><span class="n">const</span> <span class="n">char</span><span class="o">*</span><span class="p">)</span><span class="n">tolua_tostring</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">0</span><span class="p">);</span>
+</span><span class='line'>        <span class="n">CCHttpRequestMethod</span> <span class="n">method</span> <span class="o">=</span> <span class="p">(</span><span class="n">CCHttpRequestMethod</span><span class="p">)</span><span class="n">tolua_tonumber</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span>
+</span><span class='line'>                <span class="mi">4</span><span class="p">,</span><span class="n">CCHttpRequestMethodGET</span><span class="p">);</span>
+</span><span class='line'>        <span class="p">{</span>
+</span><span class='line'>            <span class="n">CCHttpRequest</span><span class="o">*</span> <span class="n">tolua_ret</span> <span class="o">=</span> <span class="n">CCHttpRequest</span><span class="p">::</span><span class="n">create</span><span class="p">(</span><span class="n">listener</span><span class="p">,</span><span class="n">url</span><span class="p">,</span><span class="n">method</span><span class="p">);</span>
+</span><span class='line'>            <span class="n">tolua_pushusertype</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,(</span><span class="n">void</span><span class="o">*</span><span class="p">)</span><span class="n">tolua_ret</span><span class="p">,</span><span class="s2">&quot;</span><span class="s">CCHttpRequest&quot;</span><span class="p">);</span>
+</span><span class='line'>        <span class="p">}</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="k">return</span> <span class="mi">1</span><span class="p">;</span>
+</span><span class='line'><span class="n">tolua_lerror</span><span class="p">:</span>
+</span><span class='line'>    <span class="n">tolua_error</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="s2">&quot;</span><span class="s">#ferror in function &#39;create&#39;.&quot;</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">);</span>
+</span><span class='line'>    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>PS: 个人认为将 C++ 对象视为一个 Lua module 时，那么类静态方法的调用方式应该是 CCHttpRequest.create() 这样，以便和实例方法区别开。</p>
+
+<p>实例方法的导出区别不大，仅仅是需要检查 stack 中的第一个值是否是对象实例：</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+</pre></td><td class='code'><pre><code class='lua'><span class='line'><span class="o">//</span> <span class="n">CCHttpRequest</span><span class="p">:</span><span class="n">start</span><span class="p">()</span>
+</span><span class='line'><span class="n">static</span> <span class="n">int</span> <span class="n">tolua_cocos2dx_extension_network_CCHttpRequest_start00</span><span class="p">(</span><span class="n">lua_State</span><span class="o">*</span> <span class="n">tolua_S</span><span class="p">)</span>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>    <span class="n">tolua_Error</span> <span class="n">tolua_err</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="err">!</span><span class="n">tolua_isusertype</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="s2">&quot;</span><span class="s">CCHttpRequest&quot;</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">)</span> <span class="err">||</span>
+</span><span class='line'>        <span class="err">!</span><span class="n">tolua_isboolean</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">)</span> <span class="err">||</span>
+</span><span class='line'>        <span class="err">!</span><span class="n">tolua_isnoobj</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">))</span>
+</span><span class='line'>    <span class="p">{</span>
+</span><span class='line'>        <span class="n">goto</span> <span class="n">tolua_lerror</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="k">else</span>
+</span><span class='line'>    <span class="p">{</span>
+</span><span class='line'>        <span class="n">CCHttpRequest</span><span class="o">*</span> <span class="n">self</span> <span class="o">=</span> <span class="p">(</span><span class="n">CCHttpRequest</span><span class="o">*</span><span class="p">)</span><span class="n">tolua_tousertype</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">);</span>
+</span><span class='line'>        <span class="k">if</span> <span class="p">(</span><span class="err">!</span><span class="n">self</span><span class="p">)</span>
+</span><span class='line'>        <span class="p">{</span>
+</span><span class='line'>            <span class="n">tolua_error</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="s2">&quot;</span><span class="s">invalid &#39;self&#39; in function &#39;start&#39;&quot;</span><span class="p">,</span> <span class="n">NULL</span><span class="p">);</span>
+</span><span class='line'>        <span class="p">}</span>
+</span><span class='line'>        <span class="n">bool</span> <span class="n">isCached</span> <span class="o">=</span> <span class="p">(</span><span class="n">bool</span><span class="p">)</span><span class="n">tolua_toboolean</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="kc">false</span><span class="p">);</span>
+</span><span class='line'>        <span class="n">self</span><span class="o">-&gt;</span><span class="n">start</span><span class="p">(</span><span class="n">isCached</span><span class="p">);</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'><span class="n">tolua_lerror</span><span class="p">:</span>
+</span><span class='line'>    <span class="n">tolua_error</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="s2">&quot;</span><span class="s">#ferror in function &#39;start&#39;.&quot;</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">);</span>
+</span><span class='line'>    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>定义完所有要导出的方法后，tolua++ 目标文件将定义所有的模块并注册上述导出的方法。</p>
+
+<p>~</p>
+
+<h3>注册模块和方法</h3>
+
+<p>对于 C 函数，会添加到 Lua 的全局名字空间中，而每一个 C++ 对象，则会注册一个与类名相同的 table，并添加到全局名字空间。</p>
+
+<p>C++ 对象对应的 table 添加后，会将导出的类静态方法和实例方法添加到这个 table。</p>
+
+<p>~</p>
+
+<h2>tolua++ 库</h2>
+
+<p>要想让目标文件正常工作，还需要依赖 tolua++ 库提供的功能。这个库提供下列功能：</p>
+
+<ul>
+<li>push 各种值到 lua stack；</li>
+<li>push 一个对象或结构到 lua stack;</li>
+<li>从 lua stack 取出值或对象等；</li>
+<li>检查 lua stack 中值的类型；</li>
+<li>在 lua 值被回收时删除对象实例。</li>
+</ul>
+
+
+<p>其实这篇文章应该还有不少内容，但我实在是懒得写了。。。原谅我这个程序猿吧 -_-#</p>
+
+<p>因为下一篇文章才是我要说的重点 :)</p>
+
+<p>~</p>
+
+<p>-EOF-</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[cocos2d-x 2.0 自适应多种分辨率]]></title>
+    <link href="http://dualface.github.com/blog/2012/08/17/cocos2d-x-2-dot-0-multi-resolution/"/>
+    <updated>2012-08-17T23:17:00+08:00</updated>
+    <id>http://dualface.github.com/blog/2012/08/17/cocos2d-x-2-dot-0-multi-resolution</id>
+    <content type="html"><![CDATA[<p>cocos2d-x 2.0 提供一个极有价值的新特征: setDesignResolutionSize() 。</p>
+
+<p>这个函数用于指定一个 OpenGL 视图，然后将这个视图映射到设备屏幕上。根据不同的设定，视图会自动缩放显示内容，为 cocos2d-x 自适应多种分辨率提供了基本支持。</p>
+
+<!--more-->
+
+
+<p>不过要真正实现自适应分辨率，从场景设计、美术制作到程序编写，都需要遵循一套规范，才能极大减少工作量。</p>
+
+<blockquote><p>注意：本文假定游戏是横向显示的。</p></blockquote>
+
+
+<p>~</p>
+
+<h2>明确自适应多种分辨率的需求</h2>
+
+<p>要让游戏在不同分辨率下都获得良好的用户体验，应该满足这几个要求：</p>
+
+<ul>
+<li>背景图填满整个画面，不出现黑边；</li>
+<li>背景图的主要内容都显示在屏幕上，尽可能少的裁剪图片（减少超出屏幕可视区域的部分）；</li>
+<li>如果背景图需要放大，尽可能减小放大的比例，避免放大后出现明显的模糊；</li>
+<li>用户界面的文字标签、按钮在任何分辨率下都应该完整显示，并且容易交互。</li>
+</ul>
+
+
+<p>上述需求实际上可以分解为两部分：</p>
+
+<ul>
+<li>如何制作满足多种分辨率的背景图；</li>
+<li>如何定位用户界面元素（标签、按钮等）。</li>
+</ul>
+
+
+<p>~</p>
+
+<h2>制作适合多种分辨率的背景图</h2>
+
+<p>在开始制作背景图前，我们看看市面上各种设备（480 像素分辨率的老设备 2012 的游戏应该可以无视了）常见的像素分辨率（resolution in pixels）：</p>
+
+<table>
+<thead>
+<tr>
+<th>Device              </th>
+<th> Width  </th>
+<th> Height</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>iPad                </td>
+<td> 1024px </td>
+<td>  768px</td>
+</tr>
+<tr>
+<td>New iPad            </td>
+<td> 2048px </td>
+<td> 1536px</td>
+</tr>
+<tr>
+<td>iPhone              </td>
+<td>  960px </td>
+<td>  640px</td>
+</tr>
+<tr>
+<td>Android Phone 1     </td>
+<td>  800px </td>
+<td>  480px</td>
+</tr>
+<tr>
+<td>Android Phone 2     </td>
+<td>  854px </td>
+<td>  480px</td>
+</tr>
+<tr>
+<td>Android Phone 3     </td>
+<td> 1280px </td>
+<td>  720px</td>
+</tr>
+<tr>
+<td>Android Pad 1       </td>
+<td> 1024px </td>
+<td>  600px</td>
+</tr>
+<tr>
+<td>Android Pad 2       </td>
+<td> 1280px </td>
+<td>  800px</td>
+</tr>
+</tbody>
+</table>
+
+
+<p>经过几个游戏的实践，我们确定了几个背景图的分辨率：</p>
+
+<ul>
+<li><p>2048px * 1536px</p>
+
+<p>专门针对 New iPad，设计师的原稿也是这个尺寸。</p></li>
+<li><p>960px * 720px</p>
+
+<p>这个分辨率针对 iPhone 和 iPad 设备。在 iPhone 上 1:1 显示，上下各剪裁掉 40px。而在 iPad 上按 1.067 放大显示，正好填满整个屏幕，并且用户看不到模糊。从 2048px 的原稿导出 PNG 时，按照 0.469 比例缩小正好就是 960px * 720px。</p></li>
+<li><p>854px * 480px</p>
+
+<p>市面上的 Android 手机，854px * 480px 和 800px * 480px 是最常见的两种分辨率。2048px 的原稿按照 0.417 比例缩小，然后裁减掉上下多余部分就可以得到需要的 PNG 图片。</p></li>
+<li><p>1280px * 800px</p>
+
+<p>应付高分辨率的 Android 手机和平板设备，在各种分辨率下都可以获得很好的显示效果。2048px 的原稿按照 0.625 比例缩小，然后裁减掉上下多余部分就可以得到需要的 PNG 图片。</p></li>
+</ul>
+
+
+<p>对于美术来说，背景图都按照 2048px * 1536px 的尺寸绘制。然后用脚本配合 ImageMagick 就可以自动导出四种分辨率的背景图片。</p>
+
+<p>如果需要最大程度减小游戏的下载体积，那么可以只使用 960px * 720px 的素材。并且参考本文后面示例程序的做法，用一套素材应付各种不同的分辨率。</p>
+
+<p>唯一需要注意的问题就是：<strong>确保画面中的主要内容在各种设备上都位于屏幕的可视区域中</strong>。</p>
+
+<p>下面几个图展示 2048px 原稿在不同设备上的可视区域：</p>
+
+<p><img src="http://dualface.github.com/upload/cocos2d-x-2.0-multires/multires_01.png" alt="" /></p>
+
+<p><img src="http://dualface.github.com/upload/cocos2d-x-2.0-multires/multires_02.png" alt="" /></p>
+
+<p><img src="http://dualface.github.com/upload/cocos2d-x-2.0-multires/multires_03.png" alt="" /></p>
+
+<p><img src="http://dualface.github.com/upload/cocos2d-x-2.0-multires/multires_04.png" alt="" /></p>
+
+<p><img src="http://dualface.github.com/upload/cocos2d-x-2.0-multires/multires_05.png" alt="" /></p>
+
+<p><img src="http://dualface.github.com/upload/cocos2d-x-2.0-multires/multires_06.png" alt="" /></p>
+
+<p><img src="http://dualface.github.com/upload/cocos2d-x-2.0-multires/multires_07.png" alt="" /></p>
+
+<p>Photoshop 源文件下载地址: <a href="http://dualface.github.com/upload/cocos2d-x-2.0-multires/multires.psd">multires.psd</a></p>
+
+<p>~</p>
+
+<h2>制作适合各种分辨率的用户界面元素</h2>
+
+<p>相比背景图，界面元素的制作只需要考虑一点：<strong>必须能够放置在最小的可视区域中</strong>。如下图界面底部有一排按钮，这些按钮在各种分辨率下都能完整显示：</p>
+
+<p><img src="http://dualface.github.com/upload/cocos2d-x-2.0-multires/multires_ui01.png" alt="" /></p>
+
+<p>在导出界面元素的 PNG 图片时，仍然使用脚本文件和 ImageMagick 按照特定比例自动缩放。</p>
+
+<p>~</p>
+
+<h2>在各种分辨率的屏幕上定位界面元素</h2>
+
+<p>准备好了美术素材，接下来的挑战就是如何在不同分辨率的设备中定位界面元素。</p>
+
+<p>为了解决这个问题，我们做了大量的尝试，最终找到一种可行的解决方案，而且使用起来非常简单。</p>
+
+<h3>虚拟分辨率</h3>
+
+<p>为了简化程序的开发，我们使用一个统一的虚拟坐标系来映射设备的屏幕。经过几个产品的实践，证明将屏幕宽度设定为 960pt 是很合理的。</p>
+
+<p><strong>特别注意：在讨论虚拟坐标系时，一律使用 pt（Point）作为单位，而不是 px（Pixel）。</strong></p>
+
+<p>下面的表格整理了各种设备分辨率与 960pt 宽度虚拟分辨率的对应关系：</p>
+
+<table>
+<thead>
+<tr>
+<th>Device              </th>
+<th> Width  </th>
+<th> Height  </th>
+<th> Virtual Width </th>
+<th> Virutal Height </th>
+<th> Scale</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>iPad                </td>
+<td> 1024px </td>
+<td>  768px  </td>
+<td> 960pt         </td>
+<td> 720pt          </td>
+<td> 1.066666667</td>
+</tr>
+<tr>
+<td>New iPad            </td>
+<td> 2048px </td>
+<td> 1536px  </td>
+<td> 960pt         </td>
+<td> 720pt          </td>
+<td> 2.133333333</td>
+</tr>
+<tr>
+<td>iPhone              </td>
+<td>  960px </td>
+<td>  640px  </td>
+<td> 960pt         </td>
+<td> 640pt          </td>
+<td> 1.0</td>
+</tr>
+<tr>
+<td>Android Phone 1     </td>
+<td>  800px </td>
+<td>  480px  </td>
+<td> 960pt         </td>
+<td> 576pt          </td>
+<td> 0.833333333</td>
+</tr>
+<tr>
+<td>Android Phone 2     </td>
+<td>  854px </td>
+<td>  480px  </td>
+<td> 960pt         </td>
+<td> 540pt          </td>
+<td> 0.889583333</td>
+</tr>
+<tr>
+<td>Android Phone 3     </td>
+<td> 1280px </td>
+<td>  720px  </td>
+<td> 960pt         </td>
+<td> 540pt          </td>
+<td> 1.333333333</td>
+</tr>
+<tr>
+<td>Android Pad 1       </td>
+<td> 1024px </td>
+<td>  600px  </td>
+<td> 960pt         </td>
+<td> 562pt          </td>
+<td> 1.066666667</td>
+</tr>
+<tr>
+<td>Android Pad 2       </td>
+<td> 1280px </td>
+<td>  800px  </td>
+<td> 960pt         </td>
+<td> 600pt          </td>
+<td> 1.333333333</td>
+</tr>
+</tbody>
+</table>
+
+
+<h3>根据参考点定位界面元素</h3>
+
+<p>在游戏初始化时，引擎就会根据设备的实际分辨率，自动设定好对应的虚拟分辨率，并且确定屏幕上的几个参考点：</p>
+
+<table>
+<thead>
+<tr>
+<th>Position            </th>
+<th> Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>left                </td>
+<td> 0pt</td>
+</tr>
+<tr>
+<td>right               </td>
+<td> 959pt</td>
+</tr>
+<tr>
+<td>top                 </td>
+<td> 虚拟分辨率的高度 - 1</td>
+</tr>
+<tr>
+<td>bottom              </td>
+<td> 0pt</td>
+</tr>
+<tr>
+<td>center x            </td>
+<td> 480pt</td>
+</tr>
+<tr>
+<td>center y            </td>
+<td> 虚拟分辨率的高度 / 2</td>
+</tr>
+</tbody>
+</table>
+
+
+<p>有了参考点，定位界面元素就很简单了。例如一个按钮的原点（按钮图片中心点）相对于屏幕左侧 40pt，相对于屏幕底部 30pt。那么在不同分辨率的设备上，这个按钮和屏幕左下角的距离都是差不多的。</p>
+
+<p>只要确保所有界面元素都使用参考点来定位，那么就绝不会出现在设备屏幕上看不到界面元素的情况。</p>
+
+<p>~</p>
+
+<h2>示例程序</h2>
+
+<p>为了方便大家进行测试，本文的示例工程已经编译成 Windows 可执行文件。运行时可以用下列命令行启动以便测试不同分辨率：</p>
+
+<figure class='code'><figcaption><span>命令行参数</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="c"># 如果没有指定命令行参数，则默认使用 960px * 640px 的屏幕分辨率。</span>
+</span><span class='line'>multires.demo1.win32.exe 854 480
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>或者双击 test_multires.cmd 直接查看不同分辨率的运行效果。</p>
+
+<p>其他：</p>
+
+<ul>
+<li>示例程序只包含按照 960px * 720px 制作的素材。</li>
+<li>示例程序可执行文件以及源代码下载：<a href="http://dualface.github.com/upload/cocos2d-x-2.0-multires/multires.demo1.win32.zip">multires.demo1.win32.zip</a></li>
+</ul>
+
+
+<p>~</p>
+
+<h2>补充说明</h2>
+
+<p>本文前面描述了如何创建适合不同分辨率的图片，但最后的示例程序并没有考虑这一点，而是用一套素材就搞定了多种分辨率。实际上，我个人推荐使用一套素材适应多种分辨率，最多再为 New iPad 单独准备一套素材，这样可以显著减少工作量。</p>
+
+<p>如果一定要按照不同分辨率使用不同的素材，那么在显示图片时需要调用 setScale() 调整图片的缩放比例。这样做的原因是 setDesignResolutionSize() 设置虚拟分辨率后，会指定一个全局的缩放比例，所有的图片即便是 scale = 100%，也会自动缩放。所以当图片尺寸和虚拟分辨率不一致时，我们就需要手动调整图片缩放比例了。</p>
+
+<p>假设设备分辨率是 1280px * 720px，虚拟分辨率是 960pt * 540pt，背景图是 1280px * 800px。要确保背景图 1:1 显示在屏幕上，参考如下代码：</p>
+
+<figure class='code'><figcaption><span>让图片按 1:1 显示在屏幕上</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='cpp'><span class='line'><span class="k">const</span> <span class="n">CCSize</span><span class="o">&amp;</span> <span class="n">winSize</span> <span class="o">=</span> <span class="n">CCDirector</span><span class="o">::</span><span class="n">sharedDirector</span><span class="p">()</span><span class="o">-&gt;</span><span class="n">getWinSize</span><span class="p">();</span>
+</span><span class='line'><span class="kt">float</span> <span class="n">scale</span> <span class="o">=</span> <span class="n">CCEGLView</span><span class="o">::</span><span class="n">sharedOpenGLView</span><span class="p">().</span><span class="n">getScaleX</span><span class="p">();</span>
+</span><span class='line'><span class="n">CCSprite</span><span class="o">*</span> <span class="n">bg</span> <span class="o">=</span> <span class="n">CCSprite</span><span class="o">::</span><span class="n">create</span><span class="p">(</span><span class="s">&quot;bg.jpg&quot;</span><span class="p">)</span>
+</span><span class='line'><span class="n">bg</span><span class="o">-&gt;</span><span class="n">setPosition</span><span class="p">(</span><span class="n">ccp</span><span class="p">(</span><span class="n">winSize</span><span class="p">.</span><span class="n">width</span> <span class="o">/</span> <span class="mi">2</span><span class="p">,</span> <span class="n">winSize</span><span class="p">.</span><span class="n">height</span> <span class="o">/</span> <span class="mi">2</span><span class="p">));</span>
+</span><span class='line'><span class="n">bg</span><span class="o">-&gt;</span><span class="n">setScale</span><span class="p">(</span><span class="mf">1.0f</span> <span class="o">/</span> <span class="n">scale</span><span class="p">);</span> <span class="c1">// 这里重置图片缩放比例，确保图片按 1:1 显示在屏幕上</span>
+</span><span class='line'><span class="n">addChild</span><span class="p">(</span><span class="n">bg</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>~</p>
+
+<p>-EOF-</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[转到新博客，Octopress 我来啦]]></title>
+    <link href="http://dualface.github.com/blog/2012/08/05/first-octopress-post/"/>
+    <updated>2012-08-05T16:58:00+08:00</updated>
+    <id>http://dualface.github.com/blog/2012/08/05/first-octopress-post</id>
+    <content type="html"><![CDATA[<p>初步试用 Octopress，感觉很爽，尤其是下面几点：</p>
+
+<ul>
+<li>支持 Markdown 格式编写 blog：WordPress 折腾半天各种 Markdown 插件效果都不理想；</li>
+<li>支持代码高亮：WordPress 插入代码真心麻烦啊；</li>
+<li>直接放在 github.com 上，省的自己配置了：越来越厌烦 Unix/Linux 下安装配置各种软件；</li>
+<li>非常 Cool！</li>
+</ul>
+
+
+<p>好吧，希望新博客能够坚持写下去 :)</p>
+]]></content>
+  </entry>
+  
+</feed>
