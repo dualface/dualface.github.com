@@ -1,0 +1,38 @@
+
+$toc-bg: #dfdfdf;
+
+$toc-incr: 2em;
+
+div#tocBlock {
+    @include drop-shadow-right-bottom(5px, #999);
+    @include rounded-border(10px);
+    float: right !important;
+    font-size: 13px !important;
+    width: 300px !important;
+    padding: 14px 14px 14px 20px !important;
+
+    background: $toc-bg !important;
+    border: solid 1px #999999 !important;
+    margin: 14px 0 20px 20px !important;
+
+    .tocHeading {
+        font-weight: bold !important;
+        font-size: 125% !important;
+    }
+
+    ul#toc {
+        list-style: none !important;
+    }
+
+    #toc {
+        background: $toc-bg !important;
+        ul {
+            list-style: disc !important;
+            li {
+                margin-left: $toc-incr !important;
+                padding: 0 !important;
+                line-height: 20px !important;
+            }
+        }
+    }
+}
