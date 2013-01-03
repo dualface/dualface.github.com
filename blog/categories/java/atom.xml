@@ -4,7 +4,7 @@
   <title><![CDATA[Category: java | 我是妖怪]]></title>
   <link href="http://dualface.github.com/blog/categories/java/atom.xml" rel="self"/>
   <link href="http://dualface.github.com/"/>
-  <updated>2013-01-04T05:57:16+08:00</updated>
+  <updated>2013-01-04T05:58:11+08:00</updated>
   <id>http://dualface.github.com/</id>
   <author>
     <name><![CDATA[YuLei Liao]]></name>
@@ -382,9 +382,9 @@ final int luaFunctionId) {
 <pre><code>@Override
 public void run() {
   GameInterface.doBilling(useSms,
-isRepeated,
-billingIndex,
-new BillingCallback() {
+    isRepeated,
+    billingIndex,
+    new BillingCallback() {
 
     ...
 
