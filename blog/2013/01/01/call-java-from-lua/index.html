@@ -95,8 +95,7 @@
 
 <ul>
 <li>可以从 Lua 调用 Java Class Static Method</li>
-<li>调用 Java 方法时，支持 int/float/boolean/String 四种参数类型</li>
-<li>支持以用数组的形式，批量传递数据到 Java</li>
+<li>调用 Java 方法时，支持 int/float/boolean/String/Lua function 五种参数类型</li>
 <li>可以将 Lua function 作为参数传递给 Java，并让 Java 保存 Lua function 的引用</li>
 <li>可以从 Java 调用 Lua 的全局函数，或者调用引用指向的 Lua function</li>
 </ul>
@@ -159,10 +158,10 @@
 </span><span class='line'>
 </span><span class='line'><span class="c1">-- 调用 Java 方法需要的参数</span>
 </span><span class='line'><span class="kd">local</span> <span class="n">args</span> <span class="o">=</span> <span class="p">{</span>
-</span><span class='line'>    <span class="s2">&quot;</span><span class="s">001&quot;</span><span class="p">,</span>          <span class="c1">-- billingIndex</span>
-</span><span class='line'>    <span class="kc">true</span><span class="p">,</span>           <span class="c1">-- useSms</span>
-</span><span class='line'>    <span class="kc">true</span><span class="p">,</span>           <span class="c1">-- isRepeated</span>
-</span><span class='line'>    <span class="n">callback</span>        <span class="c1">-- luaFunctionId</span>
+</span><span class='line'>    <span class="s2">&quot;</span><span class="s">001&quot;</span><span class="p">,</span>    <span class="c1">-- billingIndex</span>
+</span><span class='line'>    <span class="kc">true</span><span class="p">,</span>     <span class="c1">-- useSms</span>
+</span><span class='line'>    <span class="kc">true</span><span class="p">,</span>     <span class="c1">-- isRepeated</span>
+</span><span class='line'>    <span class="n">callback</span>  <span class="c1">-- luaFunctionId</span>
 </span><span class='line'><span class="p">}</span>
 </span><span class='line'><span class="c1">-- Java 类的名称</span>
 </span><span class='line'><span class="kd">local</span> <span class="n">className</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="s">com/qeeplay/frameworks/ChinaMobile_SDK&quot;</span>
@@ -193,9 +192,9 @@
 
 <p>所谓签名，就是指 Java 方法的参数类型和返回类型定义。例如前面示例代码中 GameInterface_doBilling() 方法的签名是 (Ljava/lang/String;ZZI)V 。关于 Java 方法签名的具体定义，可以参考：<a href="http://docs.oracle.com/javase/7/docs/technotes/guides/jni/spec/types.html#wp16432">JNI Type Signatures</a>。</p>
 
-<p>由于签名有点难懂，而且和 Lua 的类型定义不一致，所以 luaj 可以根据调用参数自动猜测方法签名。示例代码中，luaj.callStaticMethod() 的第二个参数指定了要查找的方法名称，但并没有提供方法的签名，这就是利用了 luaj 的自动猜测签名功能。</p>
+<p>由于签名写起来有点啰嗦，所以 luaj 可以根据调用参数自动猜测方法签名。示例代码中，luaj.callStaticMethod() 的第二个参数指定了要查找的方法名称，但并没有提供方法的签名，这就是利用了 luaj 的自动猜测签名功能。</p>
 
-<p>示例代码指定参数部分，一共指定了 4 个参数，分别是：字符串、布尔值、布尔值、Lua function。</p>
+<p>示例代码一共指定了 4 个参数，分别是：字符串、布尔值、布尔值、Lua function。</p>
 
 <figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
@@ -214,9 +213,9 @@
 </span></code></pre></td></tr></table></div></figure>
 
 
-<p>luaj 根据这 4 个参数，会创建出 GameInterface_doBilling() 方法的签名。<em>注意 Lua function 是以整数的形式传入 Java 方法，所以 Java 方法的第四个参数是 int 类型）。</em></p>
+<p>luaj 根据这 4 个参数，会构造出正确的 GameInterface_doBilling() 方法签名。<em>注意 Lua function 是以整数的形式传入 Java 方法，所以 Java 方法的第四个参数是 int 类型）。</em></p>
 
-<p>不幸的是 Lua 里没有办法准确判断一个数值是整数还是浮点数，所以 luaj 假定所有的数值都是浮点数。下面的代码第二个调用就会失败：</p>
+<p>不幸的是 Lua 里没有办法准确判断一个数值是整数还是浮点数，所以 luaj 在猜测方法签名时，假定所有的数值都是浮点数。因此下面的代码第二个调用就会失败：</p>
 
 <figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
@@ -279,21 +278,82 @@
 </span><span class='line'><span class="cm">]]</span>
 </span><span class='line'>
 </span><span class='line'><span class="c1">-- 定义签名</span>
-</span><span class='line'><span class="c1">-- 返回值: [I]nt</span>
 </span><span class='line'><span class="c1">-- 参数: [S]tring, [I]nteger, [F]loat</span>
-</span><span class='line'><span class="kd">local</span> <span class="n">sig</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="s">I(SIF)&quot;</span>
+</span><span class='line'><span class="c1">-- 返回值: [I]nt</span>
+</span><span class='line'><span class="kd">local</span> <span class="n">sig</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="s">(Ljava/lang/String;IF)I&quot;</span>
 </span><span class='line'>
 </span><span class='line'><span class="c1">-- 调用方法并获得返回值</span>
 </span><span class='line'><span class="kd">local</span> <span class="n">ok</span><span class="p">,</span> <span class="n">ret</span> <span class="o">=</span> <span class="n">luaj</span><span class="p">.</span><span class="n">callStaticMethod</span><span class="p">(</span><span class="n">className</span><span class="p">,</span> <span class="s2">&quot;</span><span class="s">TestMethod3&quot;</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">sig</span><span class="p">)</span>
 </span></code></pre></td></tr></table></div></figure>
 
 
-<p>为了尽量与 Lua 的习惯保持一致，所以 luaj 指定的方法签名与 Java 的要求有些区别，luaj 会自动完成转换。但 luaj 也支持 Java 风格的方法签名，与上面一段代码功能等同的签名定义如下：</p>
+<p>~</p>
 
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='lua'><span class='line'><span class="kd">local</span> <span class="n">sig</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="s">(Ljava/lang/String;IF)I&quot;</span>
-</span></code></pre></td></tr></table></div></figure>
+<p>签名使用“<em>(依次排列的参数类型)返回值类型</em>”的格式，几个例子如下：</p>
 
+<table>
+<thead>
+<tr>
+<th>签名                       </th>
+<th> 解释</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>()V                       </td>
+<td> 参数：无，返回值：无</td>
+</tr>
+<tr>
+<td>(I)V                      </td>
+<td> 参数：int，返回值：无</td>
+</tr>
+<tr>
+<td>(Ljava/lang/String;)Z     </td>
+<td> 参数：字符串，返回值：布尔值</td>
+</tr>
+<tr>
+<td>(IF)Ljava/lang/String;    </td>
+<td> 参数：整数、浮点数，返回值：字符串</td>
+</tr>
+</tbody>
+</table>
+
+
+<p>这里列出不同类型对应的 Java 签名字符串：</p>
+
+<table>
+<thead>
+<tr>
+<th>类型名               </th>
+<th> 类型</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>I                   </td>
+<td> 整数，或者 Lua function</td>
+</tr>
+<tr>
+<td>F                   </td>
+<td> 浮点数</td>
+</tr>
+<tr>
+<td>Z                   </td>
+<td> 布尔值</td>
+</tr>
+<tr>
+<td>Ljava/lang/String;  </td>
+<td> 字符串</td>
+</tr>
+<tr>
+<td>V                   </td>
+<td> Void 空，仅用于指定一个 Java 方法不返回任何值</td>
+</tr>
+</tbody>
+</table>
+
+
+<p>Java 方法里接收 Lua function 的参数必须定义为 int 类型，具体原因详见“<a href="#E5B08620lua20function20E4BD9CE4B8BAE58F82E695B0E4BCA0E98092E7BB9920java20E696B9E6B395">将 Lua function 作为参数传递给 Java 方法</a>”小节。</p>
 
 <p>~</p>
 
@@ -304,8 +364,8 @@
 <p>luaj.callStaticMethod() 会返回两个值：</p>
 
 <ul>
-<li>当成功时，第一个值为 true，第二个返回值是 Java 方法的返回值（如果有）。</li>
-<li>当失败时，第一个值为 false，第二个返回值是错误信息。</li>
+<li>当成功时，第一个值为 true，第二个值是 Java 方法的返回值（如果有）。</li>
+<li>当失败时，第一个值为 false，第二个值是错误代码。</li>
 </ul>
 
 
@@ -347,7 +407,43 @@
 
 <p>~</p>
 
-<p>目前，luaj 支持从 Java 方法返回 4 种基本值类型：整数、浮点数、布尔值、字符串。</p>
+<p>错误代码定义如下：</p>
+
+<table>
+<thead>
+<tr>
+<th>错误代码  </th>
+<th> 描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>-1      </td>
+<td> 不支持的参数类型或返回值类型</td>
+</tr>
+<tr>
+<td>-2      </td>
+<td> 无效的签名</td>
+</tr>
+<tr>
+<td>-3      </td>
+<td> 没有找到指定的方法</td>
+</tr>
+<tr>
+<td>-4      </td>
+<td> Java 方法执行时抛出了异常</td>
+</tr>
+<tr>
+<td>-5      </td>
+<td> Java 虚拟机出错</td>
+</tr>
+<tr>
+<td>-6      </td>
+<td> Java 虚拟机出错</td>
+</tr>
+</tbody>
+</table>
+
 
 <p>~</p>
 
@@ -370,7 +466,7 @@
 </span></code></pre></td></tr></table></div></figure>
 
 
-<p>这里出现的 LuaJavaBridge 是 luaj 的 Java 部分定义的工具 class。其中定义的 callLuaFunctionWithString() 方法可以将一个字符串参数传递给指定的 Lua function。</p>
+<p>这里出现的 LuaJavaBridge 是 luaj 的 Java 部分定义的工具 class。 callLuaFunctionWithString() 方法可以将一个字符串参数传递给指定的 Lua function。</p>
 
 <p>LuaJavaBridge 还提供了 callLuaGlobalFunctionWithString() 方法，可以直接调用 Lua 中指定名字的全局函数。这样可以在没有 Lua function 引用 ID 的情况下和 Lua 代码交互。</p>
 
@@ -422,15 +518,10 @@
 <span class='line-number'>26</span>
 <span class='line-number'>27</span>
 <span class='line-number'>28</span>
-<span class='line-number'>29</span>
-<span class='line-number'>30</span>
 </pre></td><td class='code'><pre><code class='java'><span class='line'><span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">GameInterface_doBilling</span><span class="o">(</span><span class="kd">final</span> <span class="n">String</span> <span class="n">billingIndex</span><span class="o">,</span>
 </span><span class='line'>    <span class="kd">final</span> <span class="kt">boolean</span> <span class="n">useSms</span><span class="o">,</span>
 </span><span class='line'>    <span class="kd">final</span> <span class="kt">boolean</span> <span class="n">isRepeated</span><span class="o">,</span>
 </span><span class='line'>    <span class="kd">final</span> <span class="kt">int</span> <span class="n">luaFunctionId</span><span class="o">)</span> <span class="o">{</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="n">LuaJavaBridge</span><span class="o">.</span><span class="na">retainLuaFunction</span><span class="o">(</span><span class="n">luaFunctionId</span><span class="o">);</span>
-</span><span class='line'>
 </span><span class='line'>  <span class="n">context</span><span class="o">.</span><span class="na">runOnUiThread</span><span class="o">(</span><span class="k">new</span> <span class="n">Runnable</span><span class="o">()</span> <span class="o">{</span>
 </span><span class='line'>    <span class="nd">@Override</span>
 </span><span class='line'>    <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">()</span> <span class="o">{</span>
@@ -450,6 +541,7 @@
 </span><span class='line'>        <span class="o">}</span>
 </span><span class='line'>
 </span><span class='line'>        <span class="o">...</span>
+</span><span class='line'>
 </span><span class='line'>      <span class="o">});</span>
 </span><span class='line'>    <span class="o">}</span>
 </span><span class='line'>  <span class="o">});</span>
@@ -471,7 +563,7 @@
 
 <p>Lua 虚拟机具有自动垃圾回收机制。Lua function 既然是值，那么在没有被使用时自然会被回收掉。所以 luaj 提供了 retainLuaFunction() 和 releaseLuaFunction() 两个函数用于增减 Lua function 的引用计数。</p>
 
-<p>将一个 Lua function 以引用 ID 的形式传入 Java 后，如果需要异步调用该 Lua function，那么就必须用 retainLuaFunction() 增加计数器，避免 Lua function 被 Lua 虚拟机回收。而在 Lua function 不再使用后，也应该调用 releaseLuaFunction() 减少计数器。</p>
+<p>将一个 Lua function 以引用 ID 的形式传入 Java 时，<em>luaj 会自动增加引用 ID 的计数器</em>，所以在 Java 方法里可以放心的异步调用 Lua function。但在不需要使用该 Lua function 后，一定要<em>调用 releaseLuaFunction() 减少该引用 ID 的计数器</em>。当计数器为 0 时，会自动释放该 Lua function。</p>
 
 <p>如果了解 cocos2d-x 中 CCObject 的 autorelease 机制，那么对引用计数应该很熟悉，两者是完全相同的实现机制。</p>
 
@@ -488,397 +580,14 @@
 <p>要实现一个中间层，只有两个步骤：</p>
 
 <ul>
-<li>实现初始化方法，用于将应用程序的 Activity 对象传入 SDK；</li>
 <li>实现供 luaj 调用的 Java 接口</li>
+<li>修改游戏的 Java 入口文件，将应用程序的 Activity 对象传入 SDK</li>
 </ul>
 
 
-<p>下面就是我们项目中实际用到的<a href="https://gist.github.com/4430966">“中国移动游戏基地和短信支付 SDK”中间层源代码</a>：</p>
+<p>第一步请参考：<a href="https://gist.github.com/4447302">“中国移动游戏基地和短信支付 SDK”中间层源代码</a></p>
 
-<figure class='code'><figcaption><span>“中国移动游戏基地和短信支付 SDK”中间层</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-<span class='line-number'>29</span>
-<span class='line-number'>30</span>
-<span class='line-number'>31</span>
-<span class='line-number'>32</span>
-<span class='line-number'>33</span>
-<span class='line-number'>34</span>
-<span class='line-number'>35</span>
-<span class='line-number'>36</span>
-<span class='line-number'>37</span>
-<span class='line-number'>38</span>
-<span class='line-number'>39</span>
-<span class='line-number'>40</span>
-<span class='line-number'>41</span>
-<span class='line-number'>42</span>
-<span class='line-number'>43</span>
-<span class='line-number'>44</span>
-<span class='line-number'>45</span>
-<span class='line-number'>46</span>
-<span class='line-number'>47</span>
-<span class='line-number'>48</span>
-<span class='line-number'>49</span>
-<span class='line-number'>50</span>
-<span class='line-number'>51</span>
-<span class='line-number'>52</span>
-<span class='line-number'>53</span>
-<span class='line-number'>54</span>
-<span class='line-number'>55</span>
-<span class='line-number'>56</span>
-<span class='line-number'>57</span>
-<span class='line-number'>58</span>
-<span class='line-number'>59</span>
-<span class='line-number'>60</span>
-<span class='line-number'>61</span>
-<span class='line-number'>62</span>
-<span class='line-number'>63</span>
-<span class='line-number'>64</span>
-<span class='line-number'>65</span>
-<span class='line-number'>66</span>
-<span class='line-number'>67</span>
-<span class='line-number'>68</span>
-<span class='line-number'>69</span>
-<span class='line-number'>70</span>
-<span class='line-number'>71</span>
-<span class='line-number'>72</span>
-<span class='line-number'>73</span>
-<span class='line-number'>74</span>
-<span class='line-number'>75</span>
-<span class='line-number'>76</span>
-<span class='line-number'>77</span>
-<span class='line-number'>78</span>
-<span class='line-number'>79</span>
-<span class='line-number'>80</span>
-<span class='line-number'>81</span>
-<span class='line-number'>82</span>
-<span class='line-number'>83</span>
-<span class='line-number'>84</span>
-<span class='line-number'>85</span>
-<span class='line-number'>86</span>
-<span class='line-number'>87</span>
-<span class='line-number'>88</span>
-<span class='line-number'>89</span>
-<span class='line-number'>90</span>
-<span class='line-number'>91</span>
-<span class='line-number'>92</span>
-<span class='line-number'>93</span>
-<span class='line-number'>94</span>
-<span class='line-number'>95</span>
-<span class='line-number'>96</span>
-<span class='line-number'>97</span>
-<span class='line-number'>98</span>
-<span class='line-number'>99</span>
-<span class='line-number'>100</span>
-<span class='line-number'>101</span>
-<span class='line-number'>102</span>
-<span class='line-number'>103</span>
-<span class='line-number'>104</span>
-<span class='line-number'>105</span>
-<span class='line-number'>106</span>
-<span class='line-number'>107</span>
-<span class='line-number'>108</span>
-<span class='line-number'>109</span>
-<span class='line-number'>110</span>
-<span class='line-number'>111</span>
-<span class='line-number'>112</span>
-<span class='line-number'>113</span>
-<span class='line-number'>114</span>
-<span class='line-number'>115</span>
-<span class='line-number'>116</span>
-<span class='line-number'>117</span>
-<span class='line-number'>118</span>
-<span class='line-number'>119</span>
-<span class='line-number'>120</span>
-<span class='line-number'>121</span>
-<span class='line-number'>122</span>
-<span class='line-number'>123</span>
-<span class='line-number'>124</span>
-<span class='line-number'>125</span>
-<span class='line-number'>126</span>
-<span class='line-number'>127</span>
-<span class='line-number'>128</span>
-<span class='line-number'>129</span>
-<span class='line-number'>130</span>
-<span class='line-number'>131</span>
-<span class='line-number'>132</span>
-<span class='line-number'>133</span>
-<span class='line-number'>134</span>
-<span class='line-number'>135</span>
-<span class='line-number'>136</span>
-<span class='line-number'>137</span>
-<span class='line-number'>138</span>
-<span class='line-number'>139</span>
-<span class='line-number'>140</span>
-<span class='line-number'>141</span>
-<span class='line-number'>142</span>
-<span class='line-number'>143</span>
-<span class='line-number'>144</span>
-<span class='line-number'>145</span>
-<span class='line-number'>146</span>
-<span class='line-number'>147</span>
-<span class='line-number'>148</span>
-<span class='line-number'>149</span>
-<span class='line-number'>150</span>
-<span class='line-number'>151</span>
-<span class='line-number'>152</span>
-<span class='line-number'>153</span>
-<span class='line-number'>154</span>
-<span class='line-number'>155</span>
-<span class='line-number'>156</span>
-<span class='line-number'>157</span>
-<span class='line-number'>158</span>
-<span class='line-number'>159</span>
-<span class='line-number'>160</span>
-<span class='line-number'>161</span>
-<span class='line-number'>162</span>
-<span class='line-number'>163</span>
-<span class='line-number'>164</span>
-<span class='line-number'>165</span>
-<span class='line-number'>166</span>
-<span class='line-number'>167</span>
-<span class='line-number'>168</span>
-<span class='line-number'>169</span>
-<span class='line-number'>170</span>
-<span class='line-number'>171</span>
-<span class='line-number'>172</span>
-<span class='line-number'>173</span>
-<span class='line-number'>174</span>
-<span class='line-number'>175</span>
-<span class='line-number'>176</span>
-<span class='line-number'>177</span>
-<span class='line-number'>178</span>
-<span class='line-number'>179</span>
-<span class='line-number'>180</span>
-<span class='line-number'>181</span>
-<span class='line-number'>182</span>
-<span class='line-number'>183</span>
-<span class='line-number'>184</span>
-<span class='line-number'>185</span>
-<span class='line-number'>186</span>
-<span class='line-number'>187</span>
-<span class='line-number'>188</span>
-<span class='line-number'>189</span>
-</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="kn">package</span> <span class="n">com</span><span class="o">.</span><span class="na">qeeplay</span><span class="o">.</span><span class="na">frameworks</span><span class="o">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="kn">import</span> <span class="nn">org.cocos2dx.lib.Cocos2dxActivity</span><span class="o">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="kn">import</span> <span class="nn">android.content.Intent</span><span class="o">;</span>
-</span><span class='line'><span class="kn">import</span> <span class="nn">android.util.Log</span><span class="o">;</span>
-</span><span class='line'><span class="kn">import</span> <span class="nn">cn.emagsoftware.gamebilling.api.GameInterface</span><span class="o">;</span>
-</span><span class='line'><span class="kn">import</span> <span class="nn">cn.emagsoftware.gamebilling.api.GameInterface.BillingCallback</span><span class="o">;</span>
-</span><span class='line'><span class="kn">import</span> <span class="nn">cn.emagsoftware.gamebilling.api.GameInterface.GameExitCallback</span><span class="o">;</span>
-</span><span class='line'><span class="kn">import</span> <span class="nn">cn.emagsoftware.gamecommunity.api.GameCommunity</span><span class="o">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">public</span> <span class="kd">class</span> <span class="nc">ChinaMobile_SDK</span>
-</span><span class='line'><span class="o">{</span>
-</span><span class='line'>  <span class="kd">private</span> <span class="kd">static</span> <span class="n">Cocos2dxActivity</span> <span class="n">context</span><span class="o">;</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">setContext</span><span class="o">(</span><span class="n">Cocos2dxActivity</span> <span class="n">context_</span><span class="o">)</span> <span class="o">{</span>
-</span><span class='line'>    <span class="n">context</span> <span class="o">=</span> <span class="n">context_</span><span class="o">;</span>
-</span><span class='line'>  <span class="o">}</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">GameCommunity_initializeSDK</span><span class="o">(</span><span class="kd">final</span> <span class="n">String</span> <span class="n">appName</span><span class="o">,</span>
-</span><span class='line'>      <span class="kd">final</span> <span class="n">String</span> <span class="n">key</span><span class="o">,</span>
-</span><span class='line'>      <span class="kd">final</span> <span class="n">String</span> <span class="n">secret</span><span class="o">,</span>
-</span><span class='line'>      <span class="kd">final</span> <span class="n">String</span> <span class="n">appId</span><span class="o">)</span> <span class="o">{</span>
-</span><span class='line'>    <span class="n">context</span><span class="o">.</span><span class="na">runOnUiThread</span><span class="o">(</span><span class="k">new</span> <span class="n">Runnable</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>      <span class="nd">@Override</span>
-</span><span class='line'>      <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>        <span class="n">GameCommunity</span><span class="o">.</span><span class="na">initializeSDK</span><span class="o">(</span><span class="n">context</span><span class="o">,</span>
-</span><span class='line'>            <span class="n">appName</span><span class="o">,</span>
-</span><span class='line'>            <span class="n">key</span><span class="o">,</span>
-</span><span class='line'>            <span class="n">secret</span><span class="o">,</span>
-</span><span class='line'>            <span class="n">appId</span><span class="o">,</span>
-</span><span class='line'>            <span class="s">&quot;com.qeeplay.games.killfruitcn&quot;</span><span class="o">);</span>
-</span><span class='line'>      <span class="o">}</span>
-</span><span class='line'>    <span class="o">});</span>
-</span><span class='line'>  <span class="o">}</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">GameCommunity_exit</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>    <span class="n">context</span><span class="o">.</span><span class="na">runOnUiThread</span><span class="o">(</span><span class="k">new</span> <span class="n">Runnable</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>      <span class="nd">@Override</span>
-</span><span class='line'>      <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>        <span class="n">GameCommunity</span><span class="o">.</span><span class="na">exit</span><span class="o">();</span>
-</span><span class='line'>      <span class="o">}</span>
-</span><span class='line'>    <span class="o">});</span>
-</span><span class='line'>  <span class="o">}</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">GameCommunity_launchGameCommunity</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>    <span class="n">context</span><span class="o">.</span><span class="na">runOnUiThread</span><span class="o">(</span><span class="k">new</span> <span class="n">Runnable</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>      <span class="nd">@Override</span>
-</span><span class='line'>      <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>        <span class="n">GameCommunity</span><span class="o">.</span><span class="na">launchGameCommunity</span><span class="o">(</span><span class="n">context</span><span class="o">);</span>
-</span><span class='line'>      <span class="o">}</span>
-</span><span class='line'>    <span class="o">});</span>
-</span><span class='line'>  <span class="o">}</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">GameCommunity_launchGameRecommend</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>    <span class="n">context</span><span class="o">.</span><span class="na">runOnUiThread</span><span class="o">(</span><span class="k">new</span> <span class="n">Runnable</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>      <span class="nd">@Override</span>
-</span><span class='line'>      <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>        <span class="n">GameCommunity</span><span class="o">.</span><span class="na">launchGameRecommend</span><span class="o">(</span><span class="n">context</span><span class="o">);</span>
-</span><span class='line'>      <span class="o">}</span>
-</span><span class='line'>    <span class="o">});</span>
-</span><span class='line'>  <span class="o">}</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">GameCommunity_commitScoreWithRank</span><span class="o">(</span>
-</span><span class='line'>      <span class="kd">final</span> <span class="n">String</span> <span class="n">leaderboardId</span><span class="o">,</span>
-</span><span class='line'>      <span class="kd">final</span> <span class="kt">int</span> <span class="n">scoreValue</span><span class="o">)</span> <span class="o">{</span>
-</span><span class='line'>    <span class="n">context</span><span class="o">.</span><span class="na">runOnUiThread</span><span class="o">(</span><span class="k">new</span> <span class="n">Runnable</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>      <span class="nd">@Override</span>
-</span><span class='line'>      <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>        <span class="n">GameCommunity</span><span class="o">.</span><span class="na">commitScoreWithRank</span><span class="o">(</span><span class="n">context</span><span class="o">,</span> <span class="n">leaderboardId</span><span class="o">,</span> <span class="n">scoreValue</span><span class="o">);</span>
-</span><span class='line'>      <span class="o">}</span>
-</span><span class='line'>    <span class="o">});</span>
-</span><span class='line'>  <span class="o">}</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="c1">// ----------------------------------------</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">GameInterface_initializeApp</span><span class="o">(</span><span class="kd">final</span> <span class="n">String</span> <span class="n">appName</span><span class="o">,</span>
-</span><span class='line'>      <span class="kd">final</span> <span class="n">String</span> <span class="n">cpName</span><span class="o">,</span>
-</span><span class='line'>      <span class="kd">final</span> <span class="n">String</span> <span class="n">tel</span><span class="o">)</span> <span class="o">{</span>
-</span><span class='line'>    <span class="n">GameInterface</span><span class="o">.</span><span class="na">initializeApp</span><span class="o">(</span><span class="n">context</span><span class="o">,</span> <span class="n">appName</span><span class="o">,</span> <span class="n">cpName</span><span class="o">,</span> <span class="n">tel</span><span class="o">);</span>
-</span><span class='line'>  <span class="o">}</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">GameInterface_doBilling</span><span class="o">(</span><span class="kd">final</span> <span class="n">String</span> <span class="n">billingIndex</span><span class="o">,</span>
-</span><span class='line'>      <span class="kd">final</span> <span class="kt">boolean</span> <span class="n">useSms</span><span class="o">,</span>
-</span><span class='line'>      <span class="kd">final</span> <span class="kt">boolean</span> <span class="n">isRepeated</span><span class="o">,</span>
-</span><span class='line'>      <span class="kd">final</span> <span class="kt">int</span> <span class="n">luaFunctionId</span><span class="o">)</span> <span class="o">{</span>
-</span><span class='line'>    <span class="n">LuaJavaBridge</span><span class="o">.</span><span class="na">retainLuaFunction</span><span class="o">(</span><span class="n">luaFunctionId</span><span class="o">);</span>
-</span><span class='line'>    <span class="n">context</span><span class="o">.</span><span class="na">runOnUiThread</span><span class="o">(</span><span class="k">new</span> <span class="n">Runnable</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>      <span class="nd">@Override</span>
-</span><span class='line'>      <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>        <span class="n">GameInterface</span><span class="o">.</span><span class="na">doBilling</span><span class="o">(</span><span class="n">useSms</span><span class="o">,</span> <span class="n">isRepeated</span><span class="o">,</span> <span class="n">billingIndex</span><span class="o">,</span> <span class="k">new</span> <span class="n">BillingCallback</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>          <span class="nd">@Override</span>
-</span><span class='line'>          <span class="kd">public</span> <span class="kt">void</span> <span class="nf">onUserOperCancel</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>            <span class="n">context</span><span class="o">.</span><span class="na">runOnGLThread</span><span class="o">(</span><span class="k">new</span> <span class="n">Runnable</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>              <span class="nd">@Override</span>
-</span><span class='line'>              <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>                <span class="n">LuaJavaBridge</span><span class="o">.</span><span class="na">callLuaFunctionWithString</span><span class="o">(</span><span class="n">luaFunctionId</span><span class="o">,</span> <span class="s">&quot;cancel&quot;</span><span class="o">);</span>
-</span><span class='line'>                <span class="n">LuaJavaBridge</span><span class="o">.</span><span class="na">releaseLuaFunction</span><span class="o">(</span><span class="n">luaFunctionId</span><span class="o">);</span>
-</span><span class='line'>              <span class="o">}</span>
-</span><span class='line'>            <span class="o">});</span>
-</span><span class='line'>          <span class="o">}</span>
-</span><span class='line'>
-</span><span class='line'>          <span class="nd">@Override</span>
-</span><span class='line'>          <span class="kd">public</span> <span class="kt">void</span> <span class="nf">onBillingSuccess</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>            <span class="n">context</span><span class="o">.</span><span class="na">runOnGLThread</span><span class="o">(</span><span class="k">new</span> <span class="n">Runnable</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>              <span class="nd">@Override</span>
-</span><span class='line'>              <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>                <span class="n">LuaJavaBridge</span><span class="o">.</span><span class="na">callLuaFunctionWithString</span><span class="o">(</span><span class="n">luaFunctionId</span><span class="o">,</span> <span class="s">&quot;success&quot;</span><span class="o">);</span>
-</span><span class='line'>                <span class="n">LuaJavaBridge</span><span class="o">.</span><span class="na">releaseLuaFunction</span><span class="o">(</span><span class="n">luaFunctionId</span><span class="o">);</span>
-</span><span class='line'>              <span class="o">}</span>
-</span><span class='line'>            <span class="o">});</span>
-</span><span class='line'>          <span class="o">}</span>
-</span><span class='line'>
-</span><span class='line'>          <span class="nd">@Override</span>
-</span><span class='line'>          <span class="kd">public</span> <span class="kt">void</span> <span class="nf">onBillingFail</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>            <span class="n">context</span><span class="o">.</span><span class="na">runOnGLThread</span><span class="o">(</span><span class="k">new</span> <span class="n">Runnable</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>              <span class="nd">@Override</span>
-</span><span class='line'>              <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>                <span class="n">LuaJavaBridge</span><span class="o">.</span><span class="na">callLuaFunctionWithString</span><span class="o">(</span><span class="n">luaFunctionId</span><span class="o">,</span> <span class="s">&quot;fail&quot;</span><span class="o">);</span>
-</span><span class='line'>                <span class="n">LuaJavaBridge</span><span class="o">.</span><span class="na">releaseLuaFunction</span><span class="o">(</span><span class="n">luaFunctionId</span><span class="o">);</span>
-</span><span class='line'>              <span class="o">}</span>
-</span><span class='line'>            <span class="o">});</span>
-</span><span class='line'>          <span class="o">}</span>
-</span><span class='line'>        <span class="o">});</span>
-</span><span class='line'>      <span class="o">}</span>
-</span><span class='line'>    <span class="o">});</span>
-</span><span class='line'>  <span class="o">}</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">GameInterface_setActivateFlag</span><span class="o">(</span><span class="kd">final</span> <span class="n">String</span> <span class="n">billingIndex</span><span class="o">,</span>
-</span><span class='line'>      <span class="kt">boolean</span> <span class="n">flag</span><span class="o">)</span> <span class="o">{</span>
-</span><span class='line'>    <span class="n">GameInterface</span><span class="o">.</span><span class="na">setActivateFlag</span><span class="o">(</span><span class="n">billingIndex</span><span class="o">,</span> <span class="n">flag</span><span class="o">);</span>
-</span><span class='line'>  <span class="o">}</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="kd">public</span> <span class="kd">static</span> <span class="kt">boolean</span> <span class="nf">GameInterface_getActivateFlag</span><span class="o">(</span><span class="kd">final</span> <span class="n">String</span> <span class="n">billingIndex</span><span class="o">)</span> <span class="o">{</span>
-</span><span class='line'>    <span class="k">return</span> <span class="n">GameInterface</span><span class="o">.</span><span class="na">getActivateFlag</span><span class="o">(</span><span class="n">billingIndex</span><span class="o">);</span>
-</span><span class='line'>  <span class="o">}</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="kd">public</span> <span class="kd">static</span> <span class="kt">boolean</span> <span class="nf">GameInterface_isMusicEnabled</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>    <span class="k">return</span> <span class="n">GameInterface</span><span class="o">.</span><span class="na">isMusicEnabled</span><span class="o">();</span>
-</span><span class='line'>  <span class="o">}</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">GameInterface_viewMoreGames</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>    <span class="n">context</span><span class="o">.</span><span class="na">runOnUiThread</span><span class="o">(</span><span class="k">new</span> <span class="n">Runnable</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>      <span class="nd">@Override</span>
-</span><span class='line'>      <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>        <span class="n">GameInterface</span><span class="o">.</span><span class="na">viewMoreGames</span><span class="o">(</span><span class="n">context</span><span class="o">);</span>
-</span><span class='line'>      <span class="o">}</span>
-</span><span class='line'>    <span class="o">});</span>
-</span><span class='line'>  <span class="o">}</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">GameInterface_exit</span><span class="o">(</span><span class="kd">final</span> <span class="kt">int</span> <span class="n">luaFunctionId</span><span class="o">)</span> <span class="o">{</span>
-</span><span class='line'>    <span class="n">LuaJavaBridge</span><span class="o">.</span><span class="na">retainLuaFunction</span><span class="o">(</span><span class="n">luaFunctionId</span><span class="o">);</span>
-</span><span class='line'>    <span class="n">context</span><span class="o">.</span><span class="na">runOnUiThread</span><span class="o">(</span><span class="k">new</span> <span class="n">Runnable</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>      <span class="nd">@Override</span>
-</span><span class='line'>      <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>        <span class="n">GameInterface</span><span class="o">.</span><span class="na">exit</span><span class="o">(</span><span class="k">new</span> <span class="n">GameExitCallback</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>          <span class="nd">@Override</span>
-</span><span class='line'>          <span class="kd">public</span> <span class="kt">void</span> <span class="nf">onConfirmExit</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>            <span class="n">context</span><span class="o">.</span><span class="na">runOnGLThread</span><span class="o">(</span><span class="k">new</span> <span class="n">Runnable</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>              <span class="nd">@Override</span>
-</span><span class='line'>              <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>                <span class="n">LuaJavaBridge</span><span class="o">.</span><span class="na">callLuaFunctionWithString</span><span class="o">(</span><span class="n">luaFunctionId</span><span class="o">,</span> <span class="s">&quot;exit&quot;</span><span class="o">);</span>
-</span><span class='line'>                <span class="n">LuaJavaBridge</span><span class="o">.</span><span class="na">releaseLuaFunction</span><span class="o">(</span><span class="n">luaFunctionId</span><span class="o">);</span>
-</span><span class='line'>                <span class="n">context</span><span class="o">.</span><span class="na">runOnUiThread</span><span class="o">(</span><span class="k">new</span> <span class="n">Runnable</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>                  <span class="nd">@Override</span>
-</span><span class='line'>                  <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>                    <span class="n">System</span><span class="o">.</span><span class="na">exit</span><span class="o">(</span><span class="mi">0</span><span class="o">);</span>
-</span><span class='line'>                  <span class="o">}</span>
-</span><span class='line'>                <span class="o">});</span>
-</span><span class='line'>              <span class="o">}</span>
-</span><span class='line'>            <span class="o">});</span>
-</span><span class='line'>          <span class="o">}</span>
-</span><span class='line'>
-</span><span class='line'>          <span class="nd">@Override</span>
-</span><span class='line'>          <span class="kd">public</span> <span class="kt">void</span> <span class="nf">onCancelExit</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>            <span class="n">context</span><span class="o">.</span><span class="na">runOnGLThread</span><span class="o">(</span><span class="k">new</span> <span class="n">Runnable</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>              <span class="nd">@Override</span>
-</span><span class='line'>              <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>                <span class="n">LuaJavaBridge</span><span class="o">.</span><span class="na">callLuaFunctionWithString</span><span class="o">(</span><span class="n">luaFunctionId</span><span class="o">,</span> <span class="s">&quot;cancel&quot;</span><span class="o">);</span>
-</span><span class='line'>                <span class="n">LuaJavaBridge</span><span class="o">.</span><span class="na">releaseLuaFunction</span><span class="o">(</span><span class="n">luaFunctionId</span><span class="o">);</span>
-</span><span class='line'>              <span class="o">}</span>
-</span><span class='line'>            <span class="o">});</span>
-</span><span class='line'>          <span class="o">}</span>
-</span><span class='line'>        <span class="o">});</span>
-</span><span class='line'>      <span class="o">}</span>
-</span><span class='line'>    <span class="o">});</span>
-</span><span class='line'>  <span class="o">}</span>
-</span><span class='line'>
-</span><span class='line'><span class="o">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>~</p>
-
-<p>SDK 需要传入当前程序的 Activity，所以需要在游戏的 onCreate() 中调用 setContext() ：</p>
+<p>第二步也相当简单，只需要在游戏的 onCreate() 中调用 中间层 class 的 setContext() 方法：</p>
 
 <figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
@@ -979,7 +688,7 @@
 </span><span class='line'>  <span class="s2">&quot;</span><span class="s">0&quot;</span><span class="p">,</span>            <span class="c1">-- 排行榜Id</span>
 </span><span class='line'>  <span class="n">newBestScores</span><span class="p">,</span>  <span class="c1">-- 新的最佳成绩</span>
 </span><span class='line'><span class="p">}</span>
-</span><span class='line'><span class="kd">local</span> <span class="n">sig</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="s">V(SI)&quot;</span>
+</span><span class='line'><span class="kd">local</span> <span class="n">sig</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="s">(Ljava/lang/String;I)V&quot;</span>
 </span><span class='line'><span class="n">luaj</span><span class="p">.</span><span class="n">callStaticMethod</span><span class="p">(</span><span class="n">className</span><span class="p">,</span> <span class="s2">&quot;</span><span class="s">GameCommunity_commitScoreWithRank&quot;</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">sig</span><span class="p">)</span>
 </span></code></pre></td></tr></table></div></figure>
 
@@ -991,11 +700,21 @@
 <p>luaj 分为三个部分：</p>
 
 <ul>
-<li>LuaJavaBridge.java, com_qeeplay_frameworks_LuaJavaBridge.h/.cpp - 供 Java 端使用的工具类。</li>
+<li>LuaJavaBridge.java, com_qeeplay_frameworks_LuaJavaBridge.h/.cpp - 供 Java 端使用的工具类，包含 Java 接口定义文件和 JNI 实现。</li>
 <li>LuaJavaBridge.h/.cpp - 供 Lua 端使用的工具类。</li>
 <li>luaj.lua - LuaJavaBridge 的 Lua 包装，提供更简单和灵活的接口。</li>
 </ul>
 
+
+<p>下载地址：</p>
+
+<ul>
+<li><a href="https://github.com/dualface/quick-cocos2d-x/tree/luajit/hosts/libs/luaj">Java/C++ 部分源代码</a></li>
+<li><a href="https://github.com/dualface/quick-cocos2d-x/blob/luajit/framework/client/luaj.lua">Lua 部分源代码</a></li>
+</ul>
+
+
+<p>~</p>
 
 <p>步骤：</p>
 
@@ -1011,11 +730,11 @@
 <span class='line-number'>4</span>
 <span class='line-number'>5</span>
 <span class='line-number'>6</span>
-</pre></td><td class='code'><pre><code class='makefile'><span class='line'><span class="nv">LOCAL_SRC_FILES</span> <span class="o">:=</span> ...
+</pre></td><td class='code'><pre><code class='makefile'><span class='line'><span class="nv">LOCAL_SRC_FILES</span> <span class="o">:=</span> ... <span class="se">\</span>
 </span><span class='line'>    luaj/jni/com_qeeplay_frameworks_LuaJavaBridge.cpp <span class="se">\</span>
 </span><span class='line'>    luaj/luabinding/LuaJavaBridge.cpp
 </span><span class='line'>
-</span><span class='line'>LOCAL_C_INCLUDES :<span class="o">=</span> ...
+</span><span class='line'>LOCAL_C_INCLUDES :<span class="o">=</span> ... <span class="se">\</span>
 </span><span class='line'>    luaj
 </span></code></pre></td></tr></table></div></figure>
 
@@ -1041,6 +760,8 @@
 <span class='line-number'>14</span>
 <span class='line-number'>15</span>
 <span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
 </pre></td><td class='code'><pre><code class='makefile'><span class='line'><span class="c">#if (CC_TARGET_PLATFORM == CC_PLATFORM_ANDROID)</span>
 </span><span class='line'><span class="c">#include &quot;LuaJavaBridge.h&quot;</span>
 </span><span class='line'><span class="c">#endif</span>
@@ -1053,7 +774,9 @@
 </span><span class='line'>  <span class="nf">CCLuaEngine* pEngine = CCLuaEngine</span><span class="o">::</span><span class="m">defaultEngine();</span>
 </span><span class='line'>  CCScriptEngineManager::sharedManager<span class="o">()</span>-&gt;setScriptEngine<span class="o">(</span>pEngine<span class="o">)</span>;
 </span><span class='line'>
+</span><span class='line'><span class="c">#if (CC_TARGET_PLATFORM == CC_PLATFORM_ANDROID)</span>
 </span><span class='line'>  LuaJavaBridge_luabinding_open<span class="o">(</span>pEngine-&gt;getLuaState<span class="o">())</span>;
+</span><span class='line'><span class="c">#endif</span>
 </span><span class='line'>
 </span><span class='line'>  ...
 </span><span class='line'><span class="err">}</span>
@@ -1094,47 +817,6 @@
 <li><p><code>[Lua] luaj.callStaticMethod(className, methodName, args, methodSig)</code></p>
 
 <p>调用指定的 Java class static method，允许传入 int/float/boolean/string/function 五种类型的参数。</p></li>
-<li><p><code>[Lua] luaj.callStaticMethodWithArray(className, methodName, array)</code></p>
-
-<p>将一个 Lua table 数组转换为 Java 的 Vector 集合，并传入被调用的函数。适合批量传递数据给 Java。数组中值的支持 int/float/boolean/string 四种类型。</p>
-
-<p>callStaticMethodWithArray() 要求 Java 方法必须定义为 GetArray() 的形式（方法名随意）：只有一个 Vector 类型的参数，并返回 int 值。</p>
-
-<p>用法：</p></li>
-</ul>
-
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class='lua'><span class='line'><span class="kd">local</span> <span class="n">array</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;</span><span class="s">stringValue&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">3.14</span><span class="p">,</span> <span class="kc">true</span><span class="p">}</span>
-</span><span class='line'><span class="kd">local</span> <span class="n">ok</span><span class="p">,</span> <span class="n">ret</span> <span class="o">=</span> <span class="n">luaj</span><span class="p">.</span><span class="n">callStaticMethodWithArray</span><span class="p">(</span><span class="n">className</span><span class="p">,</span> <span class="s2">&quot;</span><span class="s">GetArray&quot;</span><span class="p">,</span> <span class="n">array</span><span class="p">)</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="kd">public</span> <span class="kd">static</span> <span class="kt">int</span> <span class="nf">GetArray</span><span class="o">(</span><span class="n">Vector</span> <span class="n">vector</span><span class="o">)</span> <span class="o">{</span>
-</span><span class='line'>  <span class="k">for</span> <span class="o">(</span><span class="n">Enumeration</span> <span class="n">e</span> <span class="o">=</span> <span class="n">hash</span><span class="o">.</span><span class="na">keys</span><span class="o">();</span> <span class="n">e</span><span class="o">.</span><span class="na">hasMoreElements</span><span class="o">();)</span>
-</span><span class='line'>  <span class="o">{</span>
-</span><span class='line'>    <span class="n">String</span> <span class="n">key</span> <span class="o">=</span> <span class="o">(</span><span class="n">String</span><span class="o">)</span><span class="n">e</span><span class="o">.</span><span class="na">nextElement</span><span class="o">();</span>
-</span><span class='line'>    <span class="n">Log</span><span class="o">.</span><span class="na">d</span><span class="o">(</span><span class="s">&quot;testWithHash&quot;</span><span class="o">,</span> <span class="s">&quot;  [&quot;</span> <span class="o">+</span> <span class="n">key</span> <span class="o">+</span> <span class="s">&quot;] = &quot;</span> <span class="o">+</span> <span class="n">hash</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="n">key</span><span class="o">).</span><span class="na">toString</span><span class="o">());</span>
-</span><span class='line'>  <span class="o">}</span>
-</span><span class='line'>  <span class="k">return</span> <span class="mi">0</span><span class="o">;</span>
-</span><span class='line'><span class="o">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>~</p>
-
-<ul>
 <li><p><code>[Java] LuaJavaBridge.callLuaFunctionWithString(int luaFunctionId, String value)</code></p>
 
 <p>调用引用 ID 指向的 Lua function，并传入一个字符串作为参数。</p></li>
@@ -1156,11 +838,11 @@
 
 <p>因为我们自己的项目暂时还没有更复杂的需求，所以 luaj 目前的实现很简单。但要在这个基础上进行完善是很容易的事情，luaj 已经解决了几个关键性问题。</p>
 
-<p>未来计划会增加的主要特性就是支持更多的类型，例如将一个以字符串做键的 Lua table 以 Java Map 集合的形式传递给 Java。同样，从 Java 调用 Lua 函数时，也应该支持多个参数，以及更多的参数类型。</p>
+<p>未来计划会增加的主要特性就是支持更多的类型，例如将一个以字符串为键名的 Lua table 以 Java Map 集合的形式传递给 Java。同样，从 Java 调用 Lua 函数时，也应该支持多个参数，以及更多的参数类型。</p>
 
 <p>至于将 Java 对象传入 Lua，并在 Lua 中调用 Java 对象的方法，目前没这个打算。因为 luaj 的主要目的是为 cocos2d-x 游戏服务，而 cocos2d-x 的多线程模式要求 Lua 和 Java 代码必须在不同的线程里运行。如果在 Lua 中调用 Java 对象方法将面对许多复杂的问题。与其花大量时间去解决这个问题（还不一定能保证最后简单易用），不如简单写一个中间层。</p>
 
-<p>最后，luaj 已经被集成到了 quick-cocos2d-x 这个基于 cocos2d-x 的快速游戏开发引擎中。quick-cocos2d-x 让开发者可以使用 Lua 语言开发一个完整的大型商业游戏，同时又保持 cocos2d-x 的高性能、开放性、可扩展能力。</p>
+<p>最后，luaj 已经被集成到了 quick-cocos2d-x 这个基于 cocos2d-x 的快速游戏开发引擎中。quick-cocos2d-x 让开发者可以使用 Lua 语言开发高质量的商业游戏，同时又保持 cocos2d-x 的高性能、开放性、可扩展能力。并且 quick-cocos2d-x 使用最新的 LuaJIT 实现，可以让 Lua 脚本获得数倍到数十倍的性能提升。</p>
 
 <p>最后的最后，惯例为广大程序猿送上福利美图一张 :-)</p>
 
