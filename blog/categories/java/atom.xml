@@ -1,0 +1,653 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: java | 我是妖怪]]></title>
+  <link href="http://dualface.github.com/blog/categories/java/atom.xml" rel="self"/>
+  <link href="http://dualface.github.com/"/>
+  <updated>2013-01-04T05:58:11+08:00</updated>
+  <id>http://dualface.github.com/</id>
+  <author>
+    <name><![CDATA[YuLei Liao]]></name>
+    <email><![CDATA[dualface@gmail.com]]></email>
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[LuaJavaBridge - Lua 与 Java 互操作的简单解决方案]]></title>
+    <link href="http://dualface.github.com/blog/2013/01/01/call-java-from-lua/"/>
+    <updated>2013-01-01T01:01:00+08:00</updated>
+    <id>http://dualface.github.com/blog/2013/01/01/call-java-from-lua</id>
+    <content type="html"><![CDATA[<p>最近在游戏里要集成中国移动的 SDK，而这些 SDK 都是用 Java 编写的。由于我们整个游戏都是使用 Lua 开发的，所以就面对 Lua 与 Java 互操作的问题。</p>
+
+<p>传统做法是先用 C/C++ 借助 JNI（Java Native Interface）编写调用 Java 的接口函数，然后再将这些函数通过 tolua++ 导出给 Lua 使用。这种做法最大的问题就是太繁琐，而且稍微有一点点修改，就要重新编译，严重降低了开发效率。</p>
+
+<p>我尝试写了几个接口函数后，发现 JNI 提供了完善的接口来操作 Java，比如查找特定的 Class、Method 等等。既然有这些东西，我想完全可以实现一个很薄的转接层。这个层会提供一些函数，让 Lua 代码可以直接调用到 Java 的方法。</p>
+
+<p>经过一番努力，LuaJavaBridge（简称 luaj）诞生了。</p>
+
+<!-- more -->
+
+
+<h2>luaj 主要特征</h2>
+
+<ul>
+<li>可以从 Lua 调用 Java Class Static Method</li>
+<li>调用 Java 方法时，支持 int/float/boolean/String/Lua function 五种参数类型</li>
+<li>可以将 Lua function 作为参数传递给 Java，并让 Java 保存 Lua function 的引用</li>
+<li>可以从 Java 调用 Lua 的全局函数，或者调用引用指向的 Lua function</li>
+</ul>
+
+
+<p>luaj 的功能很简单，但对于集成各种 SDK 来说已经完全满足需求了。</p>
+
+<h2>luaj 用法示例</h2>
+
+<p>下面的代码是我们游戏中实际使用的中国移动支付 SDK 调用代码，luaj 好不好用一目了然：</p>
+
+<p><strong>Lua 代码:</strong></p>
+
+<p>``` lua
+--[[
+购买 1000 金币</p>
+
+<p>Java 方法原型:
+public static void GameInterface_doBilling(final String billingIndex,</p>
+
+<pre><code>    final boolean useSms,
+    final boolean isRepeated,
+    final int luaFunctionId)
+</code></pre>
+
+<p>]]</p>
+
+<p>-- 用于处理支付结果的函数
+local function callback(result)</p>
+
+<pre><code>if result == "success" then
+    game.state:increaseCoins(1000)
+    game.state:save()
+end
+</code></pre>
+
+<p>end</p>
+
+<p>-- 调用 Java 方法需要的参数
+local args = {</p>
+
+<pre><code>"001",    -- billingIndex
+true,     -- useSms
+true,     -- isRepeated
+callback  -- luaFunctionId
+</code></pre>
+
+<p>}
+-- Java 类的名称
+local className = "com/qeeplay/frameworks/ChinaMobile_SDK"
+-- 调用 Java 方法
+luaj.callStaticMethod(className, "GameInterface_doBilling", args)
+```</p>
+
+<p>上面的代码就不解释了，注释已经写得非常明白。</p>
+
+<h2>luaj 实现原理</h2>
+
+<p>luaj 的核心目标有两个：从 Lua 调用 Java, 从 Java 调用 Lua。整理出来就是如下几点：</p>
+
+<ul>
+<li>查找并调用指定的 Java 方法</li>
+<li>检查调用结果，并从 Java 方法获取返回值</li>
+<li>将 Lua function 作为参数传递给 Java 方法</li>
+<li>在 Java 方法中调用 Lua function</li>
+</ul>
+
+
+<h3>查找并调用指定的 Java 方法</h3>
+
+<p>JNI 提供了 FindClass() 方法用于查找指定的 Class，所以 luaj.callStaticMethod() 的第一个参数就是要调用的 Java Class 的完整类名称（类名称中的“.”要替换为“/”）。</p>
+
+<p>找到指定 Class 后，利用 JNI 的 GetStaticMethodID() 方法就可以找到这个类的指定静态方法，前提是要提供静态方法的名称和签名。</p>
+
+<p>所谓签名，就是指 Java 方法的参数类型和返回类型定义。例如前面示例代码中 GameInterface_doBilling() 方法的签名是 (Ljava/lang/String;ZZI)V 。关于 Java 方法签名的具体定义，可以参考：<a href="http://docs.oracle.com/javase/7/docs/technotes/guides/jni/spec/types.html#wp16432">JNI Type Signatures</a>。</p>
+
+<p>由于签名写起来有点啰嗦，所以 luaj 可以根据调用参数自动猜测方法签名。示例代码中，luaj.callStaticMethod() 的第二个参数指定了要查找的方法名称，但并没有提供方法的签名，这就是利用了 luaj 的自动猜测签名功能。</p>
+
+<p>示例代码一共指定了 4 个参数，分别是：字符串、布尔值、布尔值、Lua function。</p>
+
+<p>``` lua
+-- 调用 Java 方法需要的参数
+local args = {</p>
+
+<pre><code>"001",          -- billingIndex
+true,           -- useSms
+true,           -- isRepeated
+callback        -- luaFunctionId
+</code></pre>
+
+<p>}
+```</p>
+
+<p>luaj 根据这 4 个参数，会构造出正确的 GameInterface_doBilling() 方法签名。<em>注意 Lua function 是以整数的形式传入 Java 方法，所以 Java 方法的第四个参数是 int 类型）。</em></p>
+
+<p>不幸的是 Lua 里没有办法准确判断一个数值是整数还是浮点数，所以 luaj 在猜测方法签名时，假定所有的数值都是浮点数。因此下面的代码第二个调用就会失败：</p>
+
+<p>``` lua
+local args = {1} -- 生成的方法签名是 (F)V</p>
+
+<p>--[[
+Java 方法原型:
+public static void TestMethod1(final float integerValue)
+]]
+-- 调用成功
+luaj.callStaticMethod(className, "TestMethod1", args)</p>
+
+<p>--[[
+Java 方法原型:
+public static void TestMethod2(final int integerValue)
+]]
+-- 调用失败，正确的方法签名应该是 (I)V
+luaj.callStaticMethod(className, "TestMethod2", args)
+```</p>
+
+<p>为此，luaj 允许开发者指定完整的方法签名。而且除了整数和浮点数的情况，在需要从 Java 方法获得返回值时，也需要开发者指定完整的方法签名。示例代码如下：</p>
+
+<p>``` lua
+local args ={"StringValue", 1, 3.14}</p>
+
+<p>--[[
+Java 方法原型:
+public static int TestMethod3(final String stringValue,</p>
+
+<pre><code>    final int integerValue,
+    final float floatValue)
+</code></pre>
+
+<p>]]</p>
+
+<p>-- 定义签名
+-- 参数: [S]tring, [I]nteger, [F]loat
+-- 返回值: [I]nt
+local sig = "(Ljava/lang/String;IF)I"</p>
+
+<p>-- 调用方法并获得返回值
+local ok, ret = luaj.callStaticMethod(className, "TestMethod3", args, sig)
+```</p>
+
+<p>~</p>
+
+<p>签名使用“<em>(依次排列的参数类型)返回值类型</em>”的格式，几个例子如下：</p>
+
+<table>
+<thead>
+<tr>
+<th>签名                       </th>
+<th> 解释</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>()V                       </td>
+<td> 参数：无，返回值：无</td>
+</tr>
+<tr>
+<td>(I)V                      </td>
+<td> 参数：int，返回值：无</td>
+</tr>
+<tr>
+<td>(Ljava/lang/String;)Z     </td>
+<td> 参数：字符串，返回值：布尔值</td>
+</tr>
+<tr>
+<td>(IF)Ljava/lang/String;    </td>
+<td> 参数：整数、浮点数，返回值：字符串</td>
+</tr>
+</tbody>
+</table>
+
+
+<p>这里列出不同类型对应的 Java 签名字符串：</p>
+
+<table>
+<thead>
+<tr>
+<th>类型名               </th>
+<th> 类型</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>I                   </td>
+<td> 整数，或者 Lua function</td>
+</tr>
+<tr>
+<td>F                   </td>
+<td> 浮点数</td>
+</tr>
+<tr>
+<td>Z                   </td>
+<td> 布尔值</td>
+</tr>
+<tr>
+<td>Ljava/lang/String;  </td>
+<td> 字符串</td>
+</tr>
+<tr>
+<td>V                   </td>
+<td> Void 空，仅用于指定一个 Java 方法不返回任何值</td>
+</tr>
+</tbody>
+</table>
+
+
+<p>Java 方法里接收 Lua function 的参数必须定义为 int 类型，具体原因详见“<a href="#E5B08620lua20function20E4BD9CE4B8BAE58F82E695B0E4BCA0E98092E7BB9920java20E696B9E6B395">将 Lua function 作为参数传递给 Java 方法</a>”小节。</p>
+
+<p>~</p>
+
+<h3>检查调用结果，并从 Java 方法获取返回值</h3>
+
+<p>luaj 调用 Java 方法时，可能会出现各种错误，因此 luaj 提供了一种机制让 Lua 调用代码可以确定 Java 方法是否成功调用。</p>
+
+<p>luaj.callStaticMethod() 会返回两个值：</p>
+
+<ul>
+<li>当成功时，第一个值为 true，第二个值是 Java 方法的返回值（如果有）。</li>
+<li>当失败时，第一个值为 false，第二个值是错误代码。</li>
+</ul>
+
+
+<p>下面的代码展示了如何检查返回结果和获得返回值：</p>
+
+<p>``` java Java 代码
+public static int AddTwoNumbers(final int number1,</p>
+
+<pre><code>    final int number2) {
+return number1 + number2;
+</code></pre>
+
+<p>}
+```</p>
+
+<p>``` lua Lua 代码
+local args = {2, 3}
+local sig = "(II)I"
+local ok, ret = luaj.callStaticMethod(className, "AddTwoNumbers", args, sig)</p>
+
+<p>if not ok then</p>
+
+<pre><code>print("luaj error:", ret)
+</code></pre>
+
+<p>else</p>
+
+<pre><code>print("ret:", ret) -- 输出 ret: 5
+</code></pre>
+
+<p>end
+```</p>
+
+<p>~</p>
+
+<p>错误代码定义如下：</p>
+
+<table>
+<thead>
+<tr>
+<th>错误代码  </th>
+<th> 描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>-1      </td>
+<td> 不支持的参数类型或返回值类型</td>
+</tr>
+<tr>
+<td>-2      </td>
+<td> 无效的签名</td>
+</tr>
+<tr>
+<td>-3      </td>
+<td> 没有找到指定的方法</td>
+</tr>
+<tr>
+<td>-4      </td>
+<td> Java 方法执行时抛出了异常</td>
+</tr>
+<tr>
+<td>-5      </td>
+<td> Java 虚拟机出错</td>
+</tr>
+<tr>
+<td>-6      </td>
+<td> Java 虚拟机出错</td>
+</tr>
+</tbody>
+</table>
+
+
+<p>~</p>
+
+<h3>将 Lua function 作为参数传递给 Java 方法</h3>
+
+<p>很多时候，我们需要一种方法让 Java 代码可以向 Lua 代码传递一些消息。例如在大部分游戏平台的 SDK 中，涉及支付的部分都是异步操作的。在支付操作结束后，Java 代码需要通知 Lua 支付成功与否。</p>
+
+<p>Lua 虚拟机中，Lua function 以值的形式保存。但这个值无法直接给 Java 用，所以 luaj 做了一个 Lua function 引用表。当一个 Lua function 传递给 Java 时，这个 function 对应的值会被存在引用表中，并获得一个唯一的引用 ID （整数）。Java 代码拿到这个引用 ID 后，就可以很方便的调用该 Lua function 了。</p>
+
+<p>回顾最开始的示例代码，GameInterface_doBilling() 函数用于接收 Lua function 的参数就是 int 类型。因为实际传入 Java 函数的值是 Lua function 的引用 Id。</p>
+
+<p>~</p>
+
+<h3>在 Java 方法中调用 Lua function</h3>
+
+<p>在 Java 代码中拿到 Lua function 的引用 ID 后，就可以很方便的调用该 Lua function 了：</p>
+
+<p><code>java
+LuaJavaBridge.callLuaFunctionWithString(luaFunctionId, "hello");
+</code></p>
+
+<p>这里出现的 LuaJavaBridge 是 luaj 的 Java 部分定义的工具 class。 callLuaFunctionWithString() 方法可以将一个字符串参数传递给指定的 Lua function。</p>
+
+<p>LuaJavaBridge 还提供了 callLuaGlobalFunctionWithString() 方法，可以直接调用 Lua 中指定名字的全局函数。这样可以在没有 Lua function 引用 ID 的情况下和 Lua 代码交互。</p>
+
+<p>由于自己的项目暂时没更多需求，所以目前 luaj 只支持向 Lua function 传递单个字符串参数。</p>
+
+<p>~</p>
+
+<h2>GL 线程和 UI 线程的协调</h2>
+
+<p>cocos2d-x for Android 运行在多线程环境下，所以在 Lua 和 Java 交互时需要注意选择适当的线程。</p>
+
+<p>~</p>
+
+<p>cocos2d-x 在 Android 上以两个线程来运行，分别是负责图像渲染的 GL 线程和负责 Android 系统用户界面的 UI 线程。</p>
+
+<ul>
+<li>在 cocos2d-x 启动后，Lua 代码将由 GL 线程调用，因此从 Lua 中调用的 Java 方法如果涉及到系统用户界面的显示、更新操作，那么就必须让这部分代码切换到 UI 线程上去运行。</li>
+<li>反之亦然，从 Java 调用 Lua 代码时，需要让这个调用在 GL 线程上执行，否则 Lua 代码虽然执行了，但会无法更新 cocos2d-x 内部状态。</li>
+</ul>
+
+
+<p>下面是 GameInterface_doBilling() 方法的主要代码：</p>
+
+<p>``` java
+public static void GameInterface_doBilling(final String billingIndex,</p>
+
+<pre><code>final boolean useSms,
+final boolean isRepeated,
+final int luaFunctionId) {
+</code></pre>
+
+<p>  context.runOnUiThread(new Runnable() {</p>
+
+<pre><code>@Override
+public void run() {
+  GameInterface.doBilling(useSms,
+    isRepeated,
+    billingIndex,
+    new BillingCallback() {
+
+    ...
+
+    @Override
+    public void onBillingSuccess() {
+      context.runOnGLThread(new Runnable() {
+        @Override
+        public void run() {
+          LuaJavaBridge.callLuaFunctionWithString(luaFunctionId, "success");
+          LuaJavaBridge.releaseLuaFunction(luaFunctionId);
+        }
+      });
+    }
+
+    ...
+
+  });
+}
+</code></pre>
+
+<p>  });
+}
+```</p>
+
+<p>~</p>
+
+<p>方法中，构造了一个 Runnable 对象，用来包装需要执行的 Java 代码。这个 Runnable 对象被指定运行在 UI 线程上。这样当调用 GameInterface.doBilling() 方法时就可以正确显示出支付界面。</p>
+
+<p>当用户支付成功后，GameInterface.doBilling() 会调用 BillingCallback.onBillingSuccess() 方法。这个方法里构造了另一个 Runnable 对象，包装了调用 Lua function 的代码。</p>
+
+<p>看上去代码不少，实际上就是在两个线程间互相切换。确保 Lua function 跑在 GL 线程，Java 代码跑在 UI 线程。</p>
+
+<p>~</p>
+
+<h3>Lua function 的引用计数器</h3>
+
+<p>Lua 虚拟机具有自动垃圾回收机制。Lua function 既然是值，那么在没有被使用时自然会被回收掉。所以 luaj 提供了 retainLuaFunction() 和 releaseLuaFunction() 两个函数用于增减 Lua function 的引用计数。</p>
+
+<p>将一个 Lua function 以引用 ID 的形式传入 Java 时，<em>luaj 会自动增加引用 ID 的计数器</em>，所以在 Java 方法里可以放心的异步调用 Lua function。但在不需要使用该 Lua function 后，一定要<em>调用 releaseLuaFunction() 减少该引用 ID 的计数器</em>。当计数器为 0 时，会自动释放该 Lua function。</p>
+
+<p>如果了解 cocos2d-x 中 CCObject 的 autorelease 机制，那么对引用计数应该很熟悉，两者是完全相同的实现机制。</p>
+
+<p>~</p>
+
+<h2>连接第三方 SDK 和 cocos2d-x 的中间层</h2>
+
+<p>虽然 luaj 可以让开发者从 Lua 中直接调用 Java 代码。但大部分第三方 SDK 在初始化时都需要指定当前应用程序的 Activity 对象，并且还要切换不同线程，所以对于大多数第三方 SDK，我们仍然要写一个中间层用于 Lua 和 Java 的交互。</p>
+
+<p>与使用 JNI 做中间层相比，配合 luja 的中间层是使用 Java 来编写的，不但更简单明了，而且处理线程切换也非常简单。</p>
+
+<p>~</p>
+
+<p>要实现一个中间层，只有两个步骤：</p>
+
+<ul>
+<li>实现供 luaj 调用的 Java 接口</li>
+<li>修改游戏的 Java 入口文件，将应用程序的 Activity 对象传入 SDK</li>
+</ul>
+
+
+<p>第一步请参考：<a href="https://gist.github.com/4447302">“中国移动游戏基地和短信支付 SDK”中间层源代码</a></p>
+
+<p>第二步也相当简单，只需要在游戏的 onCreate() 中调用 中间层 class 的 setContext() 方法：</p>
+
+<p>``` java
+public class mygame extends Cocos2dxActivity {</p>
+
+<p>  protected void onCreate(Bundle savedInstanceState) {</p>
+
+<pre><code>ChinaMobile_SDK.setContext(this); // init sdk
+super.onCreate(savedInstanceState);
+</code></pre>
+
+<p>  }</p>
+
+<p>  ...</p>
+
+<p>}
+```</p>
+
+<p>~</p>
+
+<p>做好一切准备工作后，在游戏的 Lua 代码里访问 SDK 功能就很简单了：</p>
+
+<p>``` lua</p>
+
+<p>local luaj = require("luaj")</p>
+
+<p>local className = "com/qeeplay/frameworks/ChinaMobile_SDK"</p>
+
+<p>-- 初始化 SDK
+local args = {
+  CHINA_MOBILE_SP_APP_NAME,
+  CHINA_MOBILE_SP_CP_NAME,
+  CHINA_MOBILE_SP_TEL
+}
+luaj.callStaticMethod(className, "GameInterface_initializeApp", args)</p>
+
+<p>-- 支付
+local function callback(result)
+  if result == "success" then</p>
+
+<pre><code>-- 支付成功
+</code></pre>
+
+<p>  end
+end</p>
+
+<p>local args = {
+  billingIndex,
+  true,
+  true,
+  callback
+}
+luaj.callStaticMethod(className, "GameInterface_doBilling", args)</p>
+
+<p>-- 显示游戏基地界面
+luaj.callStaticMethod(className, "GameCommunity_launchGameCommunity")</p>
+
+<p>-- 提交玩家的游戏成绩
+local args = {
+  "0",            -- 排行榜Id
+  newBestScores,  -- 新的最佳成绩
+}
+local sig = "(Ljava/lang/String;I)V"
+luaj.callStaticMethod(className, "GameCommunity_commitScoreWithRank", args, sig)</p>
+
+<p>```</p>
+
+<p>~</p>
+
+<h2>安装 luaj</h2>
+
+<p>luaj 分为三个部分：</p>
+
+<ul>
+<li>LuaJavaBridge.java, com_qeeplay_frameworks_LuaJavaBridge.h/.cpp - 供 Java 端使用的工具类，包含 Java 接口定义文件和 JNI 实现。</li>
+<li>LuaJavaBridge.h/.cpp - 供 Lua 端使用的工具类。</li>
+<li>luaj.lua - LuaJavaBridge 的 Lua 包装，提供更简单和灵活的接口。</li>
+</ul>
+
+
+<p>下载地址：</p>
+
+<ul>
+<li><a href="https://github.com/dualface/quick-cocos2d-x/tree/luajit/hosts/libs/luaj">Java/C++ 部分源代码</a></li>
+<li><a href="https://github.com/dualface/quick-cocos2d-x/blob/luajit/framework/client/luaj.lua">Lua 部分源代码</a></li>
+</ul>
+
+
+<p>~</p>
+
+<p>步骤：</p>
+
+<ul>
+<li>将 LuaJavaBridge.java 添加到 Android 项目中；</li>
+<li>修改 proj.android/jni/Android.mk：</li>
+</ul>
+
+
+<p>``` makefile</p>
+
+<p>LOCAL_SRC_FILES := ... \</p>
+
+<pre><code>luaj/jni/com_qeeplay_frameworks_LuaJavaBridge.cpp \
+luaj/luabinding/LuaJavaBridge.cpp
+</code></pre>
+
+<p>LOCAL_C_INCLUDES := ... \</p>
+
+<pre><code>luaj
+</code></pre>
+
+<p>```</p>
+
+<ul>
+<li>修改 AppDelegate.cpp，加入以下代码：</li>
+</ul>
+
+
+<p>```</p>
+
+<h1>if (CC_TARGET_PLATFORM == CC_PLATFORM_ANDROID)</h1>
+
+<h1>include "LuaJavaBridge.h"</h1>
+
+<h1>endif</h1>
+
+<p>bool AppDelegate::applicationDidFinishLaunching()
+{</p>
+
+<p>  ...</p>
+
+<p>  CCLuaEngine* pEngine = CCLuaEngine::defaultEngine();
+  CCScriptEngineManager::sharedManager()->setScriptEngine(pEngine);</p>
+
+<h1>if (CC_TARGET_PLATFORM == CC_PLATFORM_ANDROID)</h1>
+
+<p>  LuaJavaBridge_luabinding_open(pEngine->getLuaState());</p>
+
+<h1>endif</h1>
+
+<p>  ...
+}
+```</p>
+
+<ul>
+<li>修改proj.android/jni/hellocpp/main.cpp，加入以下代码：</li>
+</ul>
+
+
+<p>``` c++
+jint JNI_OnLoad(JavaVM <em>vm, void </em>reserved)
+{</p>
+
+<p>  ...</p>
+
+<p>  LuaJavaBridge_setJavaVM(vm);</p>
+
+<p>  return JNI_VERSION_1_4;
+}</p>
+
+<p>```</p>
+
+<p>~</p>
+
+<h2>luaj 方法参考</h2>
+
+<ul>
+<li><p><code>[Lua] luaj.callStaticMethod(className, methodName, args, methodSig)</code></p>
+
+<p>调用指定的 Java class static method，允许传入 int/float/boolean/string/function 五种类型的参数。</p></li>
+<li><p><code>[Java] LuaJavaBridge.callLuaFunctionWithString(int luaFunctionId, String value)</code></p>
+
+<p>调用引用 ID 指向的 Lua function，并传入一个字符串作为参数。</p></li>
+<li><p><code>[Java] LuaJavaBridge.callLuaGlobalFunctionWithString(int luaFunctionId, String value)</code></p>
+
+<p>调用指定名字的 Lua 全局函数，并传入一个字符串作为参数。</p></li>
+<li><p><code>[Java] LuaJavaBridge.retainLuaFunction(int luaFunctionId)</code></p>
+
+<p>增加引用 ID 的计数，确保 Lua function 不会被 Lua 虚拟机自动回收。</p></li>
+<li><p><code>[Java] LuaJavaBridge.releaseLuaFunction(int luaFunctionId)</code></p>
+
+<p>减少引用 ID 的计数，当计数等于 0 时，引用 ID 指向的 Lua function 将被回收。</p></li>
+</ul>
+
+
+<p>~</p>
+
+<h2>未来改进</h2>
+
+<p>因为我们自己的项目暂时还没有更复杂的需求，所以 luaj 目前的实现很简单。但要在这个基础上进行完善是很容易的事情，luaj 已经解决了几个关键性问题。</p>
+
+<p>未来计划会增加的主要特性就是支持更多的类型，例如将一个以字符串为键名的 Lua table 以 Java Map 集合的形式传递给 Java。同样，从 Java 调用 Lua 函数时，也应该支持多个参数，以及更多的参数类型。</p>
+
+<p>至于将 Java 对象传入 Lua，并在 Lua 中调用 Java 对象的方法，目前没这个打算。因为 luaj 的主要目的是为 cocos2d-x 游戏服务，而 cocos2d-x 的多线程模式要求 Lua 和 Java 代码必须在不同的线程里运行。如果在 Lua 中调用 Java 对象方法将面对许多复杂的问题。与其花大量时间去解决这个问题（还不一定能保证最后简单易用），不如简单写一个中间层。</p>
+
+<p>最后，luaj 已经被集成到了 quick-cocos2d-x 这个基于 cocos2d-x 的快速游戏开发引擎中。quick-cocos2d-x 让开发者可以使用 Lua 语言开发高质量的商业游戏，同时又保持 cocos2d-x 的高性能、开放性、可扩展能力。并且 quick-cocos2d-x 使用最新的 LuaJIT 实现，可以让 Lua 脚本获得数倍到数十倍的性能提升。</p>
+
+<p>最后的最后，惯例为广大程序猿送上福利美图一张 :-)</p>
+
+<p><img src="/upload/2013-01/2013-01-01.jpg" alt="" /></p>
+]]></content>
+  </entry>
+  
+</feed>
