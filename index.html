@@ -7,7 +7,7 @@
 	<meta name="author" content="YuLei Liao">
 
 	
-	<meta name="description" content="因为我们公司使用 quick-cocos2d-x（一个基于 cocos2d-x 的 Lua 游戏引擎）开发，所以在开发环境里必须配置 Lua，并且需要和移动设备上的 32bit Lua 匹配。 默认情况下，OS X 上编译 Lua 会编译成 64bit，所以需要做点手脚。此外还需要修改 &hellip;">
+	<meta name="description" content="月初的时候，发了一篇关于 Lua 与 Java 互操作的文章，里面提到了我创建的 LuaJavaBridge 工具。现在，最新的 Lua 与 Objective-C 互操作工具也出来了。因为是专门针对 cocos2d-x 的，所以命名为 CCLuaObjcBridge。 PS: 以前的 &hellip;">
 	
 	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 
@@ -79,6 +79,54 @@
 		
 	
 	<div id="content" class="inner">
+
+
+    <article class="post">
+	<h1 class="title">
+		
+		<a href="/blog/2013/01/27/call-objectivec-from-lua/">
+		
+			CCLuaObjcBridge - Lua 与 Objective-C 互操作的简单解决方案</a>
+	</h1>
+	<div class="entry-content">
+		<p>月初的时候，发了一篇关于 <a href="/blog/2013/01/01/call-java-from-lua/">Lua 与 Java 互操作的文章</a>，里面提到了我创建的 LuaJavaBridge 工具。现在，最新的 Lua 与 Objective-C 互操作工具也出来了。因为是专门针对 cocos2d-x 的，所以命名为 CCLuaObjcBridge。</p>
+
+<p>PS: 以前的 LuaJavaBridge 也会改名为 CCLuaJavaBridge，并且参考现在 CCLuaObjcBridge 的实现，做了不少改进，完成后也会发布。</p>
+
+<p>CCLuaObjcBridge（后文简称 luaoc）的功能就是从 Lua 里直接掉用“任意 Objective-C 类方法”。利用这个特性，封装各种 iOS 上的库简直碉堡了，堪称 cocos2d-x Lua 游戏开发的神器 ^_^</p>
+
+
+		
+		<a href="/blog/2013/01/27/call-objectivec-from-lua/" class="more-link">Read on &rarr;</a>
+	</div>
+
+
+<div class="meta">
+	<div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2013-01-27T13:08:00+08:00" pubdate data-updated="true">Jan 27<span>th</span>, 2013</time></div>
+	<div class="tags">
+
+
+	<a class='category' href='/blog/categories/lua/'>lua</a>, <a class='category' href='/blog/categories/objectivec/'>objectivec</a>
+
+
+</div>
+	
+		<span class="comments"><a href="/blog/2013/01/27/call-objectivec-from-lua//index.html#disqus_thread">Comments</a></span>
+	
+</div>
+</article>
 
 
     <article class="post">

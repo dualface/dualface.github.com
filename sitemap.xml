@@ -14,18 +14,22 @@
     </url>
     <url>
         <loc>http://dualface.github.com/blog/2013/01/01/call-java-from-lua/</loc>
-        <lastmod>2013-01-27T13:04:16+08:00</lastmod>
+        <lastmod>2013-01-27T13:14:01+08:00</lastmod>
     </url>
     <url>
         <loc>http://dualface.github.com/blog/2013/01/27/install-32bit-lua-on-macosx/</loc>
         <lastmod>2013-01-27T13:02:01+08:00</lastmod>
     </url>
     <url>
+        <loc>http://dualface.github.com/blog/2013/01/27/call-objectivec-from-lua/</loc>
+        <lastmod>2013-01-27T13:58:57+08:00</lastmod>
+    </url>
+    <url>
         <loc>http://dualface.github.com/blog/archives/</loc>
-        <lastmod>2013-01-27T13:04:16+08:00</lastmod>
+        <lastmod>2013-01-27T13:58:57+08:00</lastmod>
     </url>
     <url>
         <loc>http://dualface.github.com/</loc>
-        <lastmod>2013-01-27T13:04:16+08:00</lastmod>
+        <lastmod>2013-01-27T13:58:57+08:00</lastmod>
     </url>
 </urlset>
