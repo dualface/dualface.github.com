@@ -7,7 +7,7 @@
 	<meta name="author" content="YuLei Liao">
 
 	
-	<meta name="description" content="最近在游戏里要集成中国移动的 SDK，而这些 SDK 都是用 Java 编写的。由于我们整个游戏都是使用 Lua 开发的，所以就面对 Lua 与 Java 互操作的问题。 传统做法是先用 C/C++ 借助 JNI（Java Native Interface）编写调用 Java 的接口函数， &hellip;">
+	<meta name="description" content="因为我们公司使用 quick-cocos2d-x（一个基于 cocos2d-x 的 Lua 游戏引擎）开发，所以在开发环境里必须配置 Lua，并且需要和移动设备上的 32bit Lua 匹配。 默认情况下，OS X 上编译 Lua 会编译成 64bit，所以需要做点手脚。此外还需要修改 &hellip;">
 	
 	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 
@@ -79,6 +79,52 @@
 		
 	
 	<div id="content" class="inner">
+
+
+    <article class="post">
+	<h1 class="title">
+		
+		<a href="/blog/2013/01/27/install-32bit-lua-on-macosx/">
+		
+			在 Mac OS X 上安装 Lua 32bit 环境</a>
+	</h1>
+	<div class="entry-content">
+		<p>因为我们公司使用 <a href="https://github.com/dualface/quick-cocos2d-x">quick-cocos2d-x</a>（一个基于 cocos2d-x 的 Lua 游戏引擎）开发，所以在开发环境里必须配置 Lua，并且需要和移动设备上的 32bit Lua 匹配。</p>
+
+<p>默认情况下，OS X 上编译 Lua 会编译成 64bit，所以需要做点手脚。此外还需要修改 LuaRocks，不然用 Lua 是编译成 32bit 了，可用 LuaRocks 安装的扩展还是 64bit。</p>
+
+
+		
+		<a href="/blog/2013/01/27/install-32bit-lua-on-macosx/" class="more-link">Read on &rarr;</a>
+	</div>
+
+
+<div class="meta">
+	<div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2013-01-27T11:42:00+08:00" pubdate data-updated="true">Jan 27<span>th</span>, 2013</time></div>
+	<div class="tags">
+
+
+	<a class='category' href='/blog/categories/lua/'>lua</a>
+
+
+</div>
+	
+		<span class="comments"><a href="/blog/2013/01/27/install-32bit-lua-on-macosx//index.html#disqus_thread">Comments</a></span>
+	
+</div>
+</article>
 
 
     <article class="post">

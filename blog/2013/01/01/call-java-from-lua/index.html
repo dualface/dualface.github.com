@@ -518,9 +518,6 @@
 <span class='line-number'>26</span>
 <span class='line-number'>27</span>
 <span class='line-number'>28</span>
-<span class='line-number'>29</span>
-<span class='line-number'>30</span>
-<span class='line-number'>31</span>
 </pre></td><td class='code'><pre><code class='java'><span class='line'><span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">GameInterface_doBilling</span><span class="o">(</span><span class="kd">final</span> <span class="n">String</span> <span class="n">billingIndex</span><span class="o">,</span>
 </span><span class='line'>    <span class="kd">final</span> <span class="kt">boolean</span> <span class="n">useSms</span><span class="o">,</span>
 </span><span class='line'>    <span class="kd">final</span> <span class="kt">boolean</span> <span class="n">isRepeated</span><span class="o">,</span>
@@ -528,10 +525,7 @@
 </span><span class='line'>  <span class="n">context</span><span class="o">.</span><span class="na">runOnUiThread</span><span class="o">(</span><span class="k">new</span> <span class="n">Runnable</span><span class="o">()</span> <span class="o">{</span>
 </span><span class='line'>    <span class="nd">@Override</span>
 </span><span class='line'>    <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>      <span class="n">GameInterface</span><span class="o">.</span><span class="na">doBilling</span><span class="o">(</span><span class="n">useSms</span><span class="o">,</span>
-</span><span class='line'>        <span class="n">isRepeated</span><span class="o">,</span>
-</span><span class='line'>        <span class="n">billingIndex</span><span class="o">,</span>
-</span><span class='line'>        <span class="k">new</span> <span class="nf">BillingCallback</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>      <span class="n">GameInterface</span><span class="o">.</span><span class="na">doBilling</span><span class="o">(</span><span class="n">useSms</span><span class="o">,</span> <span class="n">isRepeated</span><span class="o">,</span> <span class="n">billingIndex</span><span class="o">,</span> <span class="k">new</span> <span class="n">BillingCallback</span><span class="o">()</span> <span class="o">{</span>
 </span><span class='line'>
 </span><span class='line'>        <span class="o">...</span>
 </span><span class='line'>

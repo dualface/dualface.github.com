@@ -4,7 +4,7 @@
   <title><![CDATA[Category: lua | 我是妖怪]]></title>
   <link href="http://dualface.github.com/blog/categories/lua/atom.xml" rel="self"/>
   <link href="http://dualface.github.com/"/>
-  <updated>2013-01-20T15:52:58+08:00</updated>
+  <updated>2013-01-27T13:02:26+08:00</updated>
   <id>http://dualface.github.com/</id>
   <author>
     <name><![CDATA[YuLei Liao]]></name>
@@ -12,6 +12,91 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[在 Mac OS X 上安装 Lua 32bit 环境]]></title>
+    <link href="http://dualface.github.com/blog/2013/01/27/install-32bit-lua-on-macosx/"/>
+    <updated>2013-01-27T11:42:00+08:00</updated>
+    <id>http://dualface.github.com/blog/2013/01/27/install-32bit-lua-on-macosx</id>
+    <content type="html"><![CDATA[<p>因为我们公司使用 <a href="https://github.com/dualface/quick-cocos2d-x">quick-cocos2d-x</a>（一个基于 cocos2d-x 的 Lua 游戏引擎）开发，所以在开发环境里必须配置 Lua，并且需要和移动设备上的 32bit Lua 匹配。</p>
+
+<p>默认情况下，OS X 上编译 Lua 会编译成 64bit，所以需要做点手脚。此外还需要修改 LuaRocks，不然用 Lua 是编译成 32bit 了，可用 LuaRocks 安装的扩展还是 64bit。</p>
+
+<!--more-->
+
+
+<h2>编译 32bit Lua</h2>
+
+<p>下载源代码（我用的 Lua 5.1.5）后，修改文件 src/Makefile，找到：</p>
+
+<p>``` makefile
+macosx:</p>
+
+<pre><code>$(MAKE) all MYCFLAGS=-DLUA_USE_LINUX MYLIBS="-lreadline"
+</code></pre>
+
+<p>```</p>
+
+<p>改为：</p>
+
+<p>``` makefile
+macosx:</p>
+
+<pre><code>$(MAKE) all MYCFLAGS="-arch i386 -DLUA_USE_LINUX" MYLIBS="-arch i386 -lreadline"
+</code></pre>
+
+<p>```</p>
+
+<p>make 后，file src/lua 可以看到已经是 32bit 执行文件了。</p>
+
+<p><code>bash
+$ make
+$ file src/lua
+src/lua: Mach-O executable i386
+</code></p>
+
+<br />
+
+
+<h2>让 LuaRocks 安装 32bit 扩展</h2>
+
+<p>首先安装 LuaRocks，然后修改文件 /usr/local/share/lua/5.1/luarocks/cfg.lua，找到：</p>
+
+<p><code>lua
+if detected.macosx then
+   ...
+   defaults.variables.LIBFLAG = "-arch i386 -bundle -undefined dynamic_lookup -all_load"
+   ...
+end
+</code></p>
+
+<p>改为：</p>
+
+<p><code>lua
+if detected.macosx then
+   ...
+   defaults.variables.CFLAGS = "-arch i386"
+   defaults.variables.LIBFLAG = "-arch i386 -bundle -undefined dynamic_lookup -all_load"
+   ...
+end
+</code></p>
+
+<p>增加 CFLAGS 标志，并在 LIBFLAG 中添加 "-arch i386"。修改完成后，用 LuaRocks 重新安装需要的扩展。</p>
+
+<p>``` bash
+$ sudo luarocks install luafilesystem
+...
+luafilesystem 1.6.2-1 is now built and installed in /usr/local/</p>
+
+<p>$ file /usr/local/lib/lua/5.1/lfs.so
+/usr/local/lib/lua/5.1/lfs.so: Mach-O bundle i386
+```</p>
+
+<p>- 完 -</p>
+
+<p>PS: 找了半天没找到含而不露的福利图 -3-</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[tolua++ 实现分析]]></title>

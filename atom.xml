@@ -4,7 +4,7 @@
   <title><![CDATA[我是妖怪]]></title>
   <link href="http://dualface.github.com/atom.xml" rel="self"/>
   <link href="http://dualface.github.com/"/>
-  <updated>2013-01-20T15:52:58+08:00</updated>
+  <updated>2013-01-27T13:02:26+08:00</updated>
   <id>http://dualface.github.com/</id>
   <author>
     <name><![CDATA[YuLei Liao]]></name>
@@ -12,6 +12,111 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[在 Mac OS X 上安装 Lua 32bit 环境]]></title>
+    <link href="http://dualface.github.com/blog/2013/01/27/install-32bit-lua-on-macosx/"/>
+    <updated>2013-01-27T11:42:00+08:00</updated>
+    <id>http://dualface.github.com/blog/2013/01/27/install-32bit-lua-on-macosx</id>
+    <content type="html"><![CDATA[<p>因为我们公司使用 <a href="https://github.com/dualface/quick-cocos2d-x">quick-cocos2d-x</a>（一个基于 cocos2d-x 的 Lua 游戏引擎）开发，所以在开发环境里必须配置 Lua，并且需要和移动设备上的 32bit Lua 匹配。</p>
+
+<p>默认情况下，OS X 上编译 Lua 会编译成 64bit，所以需要做点手脚。此外还需要修改 LuaRocks，不然用 Lua 是编译成 32bit 了，可用 LuaRocks 安装的扩展还是 64bit。</p>
+
+<!--more-->
+
+
+<h2>编译 32bit Lua</h2>
+
+<p>下载源代码（我用的 Lua 5.1.5）后，修改文件 src/Makefile，找到：</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='makefile'><span class='line'><span class="nf">macosx</span><span class="o">:</span>
+</span><span class='line'>    <span class="k">$(</span>MAKE<span class="k">)</span> all <span class="nv">MYCFLAGS</span><span class="o">=</span>-DLUA_USE_LINUX <span class="nv">MYLIBS</span><span class="o">=</span><span class="s2">&quot;-lreadline&quot;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>改为：</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='makefile'><span class='line'><span class="nf">macosx</span><span class="o">:</span>
+</span><span class='line'>    <span class="k">$(</span>MAKE<span class="k">)</span> all <span class="nv">MYCFLAGS</span><span class="o">=</span><span class="s2">&quot;-arch i386 -DLUA_USE_LINUX&quot;</span> <span class="nv">MYLIBS</span><span class="o">=</span><span class="s2">&quot;-arch i386 -lreadline&quot;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>make 后，file src/lua 可以看到已经是 32bit 执行文件了。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span>make
+</span><span class='line'><span class="nv">$ </span>file src/lua
+</span><span class='line'>src/lua: Mach-O executable i386
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<br />
+
+
+<h2>让 LuaRocks 安装 32bit 扩展</h2>
+
+<p>首先安装 LuaRocks，然后修改文件 /usr/local/share/lua/5.1/luarocks/cfg.lua，找到：</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class='lua'><span class='line'><span class="k">if</span> <span class="n">detected</span><span class="p">.</span><span class="n">macosx</span> <span class="k">then</span>
+</span><span class='line'>   <span class="o">...</span>
+</span><span class='line'>   <span class="n">defaults</span><span class="p">.</span><span class="n">variables</span><span class="p">.</span><span class="n">LIBFLAG</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="s">-arch i386 -bundle -undefined dynamic_lookup -all_load&quot;</span>
+</span><span class='line'>   <span class="o">...</span>
+</span><span class='line'><span class="k">end</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>改为：</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='lua'><span class='line'><span class="k">if</span> <span class="n">detected</span><span class="p">.</span><span class="n">macosx</span> <span class="k">then</span>
+</span><span class='line'>   <span class="o">...</span>
+</span><span class='line'>   <span class="n">defaults</span><span class="p">.</span><span class="n">variables</span><span class="p">.</span><span class="n">CFLAGS</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="s">-arch i386&quot;</span>
+</span><span class='line'>   <span class="n">defaults</span><span class="p">.</span><span class="n">variables</span><span class="p">.</span><span class="n">LIBFLAG</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="s">-arch i386 -bundle -undefined dynamic_lookup -all_load&quot;</span>
+</span><span class='line'>   <span class="o">...</span>
+</span><span class='line'><span class="k">end</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>增加 CFLAGS 标志，并在 LIBFLAG 中添加 &#8220;-arch i386&#8221;。修改完成后，用 LuaRocks 重新安装需要的扩展。</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span>sudo luarocks install luafilesystem
+</span><span class='line'>...
+</span><span class='line'>luafilesystem 1.6.2-1 is now built and installed in /usr/local/
+</span><span class='line'>
+</span><span class='line'><span class="nv">$ </span>file /usr/local/lib/lua/5.1/lfs.so
+</span><span class='line'>/usr/local/lib/lua/5.1/lfs.so: Mach-O bundle i386
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>- 完 -</p>
+
+<p>PS: 找了半天没找到含而不露的福利图 -3-</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[LuaJavaBridge - Lua 与 Java 互操作的简单解决方案]]></title>
@@ -456,9 +561,6 @@
 <span class='line-number'>26</span>
 <span class='line-number'>27</span>
 <span class='line-number'>28</span>
-<span class='line-number'>29</span>
-<span class='line-number'>30</span>
-<span class='line-number'>31</span>
 </pre></td><td class='code'><pre><code class='java'><span class='line'><span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">GameInterface_doBilling</span><span class="o">(</span><span class="kd">final</span> <span class="n">String</span> <span class="n">billingIndex</span><span class="o">,</span>
 </span><span class='line'>    <span class="kd">final</span> <span class="kt">boolean</span> <span class="n">useSms</span><span class="o">,</span>
 </span><span class='line'>    <span class="kd">final</span> <span class="kt">boolean</span> <span class="n">isRepeated</span><span class="o">,</span>
@@ -466,10 +568,7 @@
 </span><span class='line'>  <span class="n">context</span><span class="o">.</span><span class="na">runOnUiThread</span><span class="o">(</span><span class="k">new</span> <span class="n">Runnable</span><span class="o">()</span> <span class="o">{</span>
 </span><span class='line'>    <span class="nd">@Override</span>
 </span><span class='line'>    <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>      <span class="n">GameInterface</span><span class="o">.</span><span class="na">doBilling</span><span class="o">(</span><span class="n">useSms</span><span class="o">,</span>
-</span><span class='line'>        <span class="n">isRepeated</span><span class="o">,</span>
-</span><span class='line'>        <span class="n">billingIndex</span><span class="o">,</span>
-</span><span class='line'>        <span class="k">new</span> <span class="nf">BillingCallback</span><span class="o">()</span> <span class="o">{</span>
+</span><span class='line'>      <span class="n">GameInterface</span><span class="o">.</span><span class="na">doBilling</span><span class="o">(</span><span class="n">useSms</span><span class="o">,</span> <span class="n">isRepeated</span><span class="o">,</span> <span class="n">billingIndex</span><span class="o">,</span> <span class="k">new</span> <span class="n">BillingCallback</span><span class="o">()</span> <span class="o">{</span>
 </span><span class='line'>
 </span><span class='line'>        <span class="o">...</span>
 </span><span class='line'>
