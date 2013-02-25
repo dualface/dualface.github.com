@@ -3,7 +3,7 @@ layout: post
 title: "cocos2d-x 2.0 自适应多种分辨率"
 date: 2012-08-17 23:17
 comments: true
-categories: cocos2dx
+categories: cocos2d
 ---
 
 cocos2d-x 2.0 提供一个极有价值的新特征: setDesignResolutionSize() 。

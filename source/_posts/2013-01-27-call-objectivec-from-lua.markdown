@@ -1,0 +1,151 @@
+---
+layout: post
+title: "CCLuaObjcBridge - Lua 与 Objective-C 互操作的简单解决方案"
+date: 2013-01-27 13:08
+comments: true
+categories: lua objectivec
+toc: true
+---
+月初的时候，发了一篇关于 [Lua 与 Java 互操作的文章](/blog/2013/01/01/call-java-from-lua/)，里面提到了我创建的 LuaJavaBridge 工具。现在，最新的 Lua 与 Objective-C 互操作工具也出来了。因为是专门针对 cocos2d-x 的，所以命名为 CCLuaObjcBridge。
+
+PS: 以前的 LuaJavaBridge 也会改名为 CCLuaJavaBridge，并且参考现在 CCLuaObjcBridge 的实现，做了不少改进，完成后也会发布。
+
+CCLuaObjcBridge（后文简称 luaoc）的功能就是从 Lua 里直接掉用“任意 Objective-C 类方法”。利用这个特性，封装各种 iOS 上的库简直碉堡了，堪称 cocos2d-x Lua 游戏开发的神器 ^_^
+
+<!--more-->
+
+## luaoc 的主要特征 ##
+
+-   可以从 Lua 调用 Objective-C Class Method
+-   调用 Objective-C 方法时，支持 int/float/boolean/String/Lua function/Lua table 六种参数类型
+-   可以将 Lua function 作为参数传递给 Objective-C，并让 Objective-C 保存 Lua function 的引用
+-   可以从 Objective-C 调用 Lua 的全局函数，或者调用引用指向的 Lua function
+
+主要功能和 luaj 是一样的，但相比老版本 luaj 做了一些针对 Objective-C 的调整。
+
+
+## luaoc 用法示例 ##
+
+下面的代码演示了如何调用 91 SDK：
+
+**Lua 代码:**
+
+``` lua
+-- 注册回调函数，在玩家离开 91 平台界面时显示一个消息
+-- PS: 91 SDK 的支付接口不会直接返回状态给客户端，支付需要在服务端验证
+local function callback(event)
+    if event == "SDKNDCOM_LEAVE_PLATFORM" then
+        print("充值正在进行中，稍候您就能收到金币啦")
+    end
+end
+
+luaoc.callStaticMethod("SDKNdCom", "registerScriptHandler", {listener = callback})
+
+-- 进入 91 的支付接口
+local args = {
+    orderId = "order-00001001001",
+    coins = 1000,
+}
+local ok, ret = luaoc.callStaticMethod("SDKNdCom", "payForCoins", args)
+if not ok then
+    print(string.format("SDKNdCom.payForCoins() - call API failure, error code: %s", tostring(ret)))
+end
+```
+
+<br />
+
+下面代码是 Objective-C 写的中间层，用来沟通 91 SDK 和 Lua 代码。
+
+**Objective-C 代码:**
+
+``` objectivec
++ (NSDictionary *) payForCoins:(NSDictionary *)dict
+{
+    NSString *orderId = [dict objectForKey:@"orderId"];
+    if (!orderId || [orderId length] == 0)
+    {
+        CFUUIDRef theUUID = CFUUIDCreate(NULL);
+        CFStringRef string = CFUUIDCreateString(NULL, theUUID);
+        CFRelease(theUUID);
+        orderId = [(NSString *)string autorelease];
+    }
+    
+    int coins = 0;
+    if ([dict objectForKey:@"coins"])
+    {
+        coins = [[dict objectForKey:@"coins"] intValue];
+    }
+    
+    NSString *description = [dict objectForKey:@"description"];
+    if (!description)
+    {
+        description = @"";
+    }
+    
+    int ret = [[NdComPlatform defaultPlatform] NdUniPayForCoin:orderId
+                                                  needPayCoins:coins
+                                                payDescription:description];
+    
+    return [NSDictionary dictionaryWithObjectsAndKeys:orderId, @"orderId",
+            [NSNumber numberWithInt:ret], @"error", nil];
+}
+
+```
+
+由于无法直接获取 Objective-C 方法的参数个数和类型，所以如果要从 Objective-C 方法里接收 Lua 传递的参数，那么只能以 NSDictionary 的形式。
+
+上述代码中，Lua 端传递了一个包含 orderId 和 coins 的表格作为参数。这个表格会被 luaoc 自动转换为 NSDictionary 对象，并传入 payForCoins:(NSDictionary*) 方法。
+
+不过从 Objective-C 返回值给 Lua 时，就可以返回各种类型的值。目前支持的值类型有 int/float/BOOL/NSString/NSDictionary。特别是可以返回 NSDictionary 类型后，Lua 代码从 Objective-C 端获取数据就简单很多了。
+
+
+## 从 Objective-C 调用 Lua
+
+由于 CCLuaObjcBridge 已经集成到[quick-cocos2d-x](https://github.com/dualface/quick-cocos2d-x)（一个基于 cocos2d-x 的 Lua 游戏引擎）中，所以从 Objective-C 调用 Lua 也更简单灵活：
+
+``` objectivec
+// functionId 是 Lua function 的引用 ID，参考 LuaJavaBridge 文章中的描述
+
+// 1. 将引用 ID 对应的 Lua function 放入 Lua stack
+CCLuaObjcBridge::pushLuaFunctionById(functionId);
+
+// 2. 将需要传递给 Lua function 的参数放入 Lua stack
+CCLuaValueDict item;
+item["title"] = CCLuaValue::stringValue("hello");
+item["coins"] = CCLuaValue::intValue(1000);
+item["success"] = CCLuaValue::booleanValue(TRUE);
+CCLuaObjcBridge::getStack()->pushCCLuaValueDict(item);
+
+// 3. 执行 Lua function
+CCLuaObjcBridge::getStack()->executeFunction(1);
+
+// 4. 释放引用 ID
+CCLuaObjcBridge::releaseLuaFunctionById(callbackId);
+```
+
+> CCLuaObjcBridge::getStack() 会返回一个 CCLuaStack 对象的指针。
+
+CCLuaStack 是 quick-cocos2d-x 引入的新对象，封装了 Lua stack 的一些常用操作。例如要将值放入 Lua stack 就提供了下列方法，支持各种数据类型：
+
+``` c++
+void pushInt(int intValue);
+void pushFloat(float floatValue);
+void pushBoolean(bool boolValue);
+void pushString(const char* stringValue);
+void pushString(const char* stringValue, int length);
+void pushNil(void);
+void pushCCObject(CCObject* objectValue, const char* typeName);
+void pushCCLuaValue(const CCLuaValue& value);
+void pushCCLuaValueDict(const CCLuaValueDict& dict);
+void pushCCLuaValueArray(const CCLuaValueArray& array);
+```
+
+相比 LuaJavaBridge，CCLuaObjcBridge 更容易使用、传递数据也更方便。以后 LuaJavaBridge 也会更名为 CCLuaJavaBridge，并使用相同的值传递机制。
+
+<br />
+
+## 参考
+
+CCLuaObjcBridge 和 LuaJavaBridge 是一脉相承，更详细的描述请参考《[LuaJavaBridge - Lua 与 Java 互操作的简单解决方案](/blog/2013/01/01/call-java-from-lua/)》。
+
+\- 完 \-

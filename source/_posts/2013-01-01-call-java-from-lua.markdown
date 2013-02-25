@@ -3,7 +3,7 @@ layout: post
 title: "LuaJavaBridge - Lua 与 Java 互操作的简单解决方案"
 date: 2013-01-01 01:01
 comments: true
-categories: lua, java
+categories: lua java
 toc: true
 ---
 
@@ -20,10 +20,10 @@ toc: true
 
 ## luaj 主要特征 ##
 
--	可以从 Lua 调用 Java Class Static Method
--	调用 Java 方法时，支持 int/float/boolean/String/Lua function 五种参数类型
--	可以将 Lua function 作为参数传递给 Java，并让 Java 保存 Lua function 的引用
--	可以从 Java 调用 Lua 的全局函数，或者调用引用指向的 Lua function
+-	  可以从 Lua 调用 Java Class Static Method
+-	  调用 Java 方法时，支持 int/float/boolean/String/Lua function 五种参数类型
+-	  可以将 Lua function 作为参数传递给 Java，并让 Java 保存 Lua function 的引用
+-	  可以从 Java 调用 Lua 的全局函数，或者调用引用指向的 Lua function
 
 luaj 的功能很简单，但对于集成各种 SDK 来说已经完全满足需求了。
 
