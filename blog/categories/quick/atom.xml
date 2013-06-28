@@ -4,7 +4,7 @@
   <title><![CDATA[Category: quick | 我是妖怪]]></title>
   <link href="http://dualface.github.com/blog/categories/quick/atom.xml" rel="self"/>
   <link href="http://dualface.github.com/"/>
-  <updated>2013-02-28T02:24:18+08:00</updated>
+  <updated>2013-06-28T16:12:05+08:00</updated>
   <id>http://dualface.github.com/</id>
   <author>
     <name><![CDATA[YuLei Liao]]></name>
@@ -14,11 +14,31 @@
 
   
   <entry>
-    <title type="html"><![CDATA[从 Flash 到 quick-cocos2d-x]]></title>
+    <title type="html"><![CDATA[从 Flash 到 cocos2d-x]]></title>
     <link href="http://dualface.github.com/blog/2013/02/28/from-flash-to-quick/"/>
     <updated>2013-02-28T00:03:00+08:00</updated>
     <id>http://dualface.github.com/blog/2013/02/28/from-flash-to-quick</id>
-    <content type="html"><![CDATA[<p>从 Flash 体系转到 quick-cocos2d-x（后文简称 quick）在技术上没有太多问题，更主要的门槛还是在工具链和具体实践上。</p>
+    <content type="html"><![CDATA[<p>前言：写这篇文章的原因是朋友公司打算将一个页游产品转为手游，邀请我过去做了两天培训。所以我根据 Flash 团队反映的一些问题做了有针对性的阐述。</p>
+
+<p>Flash 团队转入 cocos2d-x 架构，面对的大部分问题实际上都是“实施”细节，语言根本不是障碍。为了让整个内容更有条理性，我以 Flash 团队提出的问题整理了一个提纲。然后我会按照这个提纲逐步完善文章内容（这次保证不会太监 ^_<sup>）。</sup></p>
+
+<p>阅读索引：</p>
+
+<ul>
+<li>cocos2d-x 架构介绍，以及与 Flash 架构的主要差异</li>
+<li>如何创建、编译、发布 cocos2d-x 项目</li>
+<li>Lua 与 ActionScript 的主要差异</li>
+<li>Lua 里如何实现面向对象</li>
+<li>如何创建一个游戏架构，分离数据、逻辑、表现</li>
+<li>cocos2d-x 里出现的各种事件，例如触摸、重力感应等</li>
+<li>cocos2d-x 如何与服务端交互</li>
+<li>资源的整合与优化</li>
+<li>画面渲染和内存优化</li>
+<li>创建自适应多种分辨率的 UI 界面</li>
+</ul>
+
+
+<p>从 Flash 体系转到 cocos2d-x 在技术上没有太多问题，更主要的门槛还是在工具链和具体实践上。</p>
 
 <p>本文尽可能从 Flash 开发者的角度阐述如何转入 quick 体系。</p>
 

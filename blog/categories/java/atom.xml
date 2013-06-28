@@ -4,7 +4,7 @@
   <title><![CDATA[Category: java | 我是妖怪]]></title>
   <link href="http://dualface.github.com/blog/categories/java/atom.xml" rel="self"/>
   <link href="http://dualface.github.com/"/>
-  <updated>2013-02-28T02:24:18+08:00</updated>
+  <updated>2013-06-28T16:12:05+08:00</updated>
   <id>http://dualface.github.com/</id>
   <author>
     <name><![CDATA[YuLei Liao]]></name>
@@ -641,9 +641,21 @@ jint JNI_OnLoad(JavaVM <em>vm, void </em>reserved)
 
 <p>最后，luaj 已经被集成到了 quick-cocos2d-x 这个基于 cocos2d-x 的快速游戏开发引擎中。quick-cocos2d-x 让开发者可以使用 Lua 语言开发高质量的商业游戏，同时又保持 cocos2d-x 的高性能、开放性、可扩展能力。并且 quick-cocos2d-x 使用最新的 LuaJIT 实现，可以让 Lua 脚本获得数倍到数十倍的性能提升。</p>
 
-<p>最后的最后，惯例为广大程序猿送上福利美图一张 :-)</p>
+<p>惯例为广大程序猿送上福利美图一张 :-)</p>
 
 <p><img src="/upload/2013-01/2013-01-01.jpg" alt="" /></p>
+
+<p>~</p>
+
+<h2>关于 quick-cocos2d-x</h2>
+
+<p>LuaJavaBridge 已经集成到 quick-cocos2d-x 这个开源项目中，<a href="https://github.com/dualface/quick-cocos2d-x/wiki/HOWTO-~-Call-Java-from-Lua,-and-call-Lua-from-Java">用法说明</a> .</p>
+
+<p>quick-cocos2d-x 是一个可以让您觉得“爽快”的 cocos2d-x 的扩展版。基于 cocos2d-x，完全的跨平台能力、优异的性能和可靠性。而 quick-cocos2d-x 在这一切的基础上，添加了完善的 Lua 脚本语言支持，让开发者可以使用 Lua 这种简单易用的脚本语言完成商业品质的移动游戏。</p>
+
+<p><a href="https://github.com/dualface/quick-cocos2d-x">https://github.com/dualface/quick-cocos2d-x</a></p>
+
+<p>- EOF -</p>
 ]]></content>
   </entry>
   
