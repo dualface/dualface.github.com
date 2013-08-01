@@ -4,7 +4,7 @@
   <title><![CDATA[Category: lua | 我是妖怪]]></title>
   <link href="http://dualface.github.com/blog/categories/lua/atom.xml" rel="self"/>
   <link href="http://dualface.github.com/"/>
-  <updated>2013-08-01T15:08:47+08:00</updated>
+  <updated>2013-08-01T15:57:52+08:00</updated>
   <id>http://dualface.github.com/</id>
   <author>
     <name><![CDATA[YuLei Liao]]></name>
@@ -50,7 +50,7 @@
 
 <p>大概在 2012 年上半年，我们公司开始使用 cocos2d-x + Lua 来开发游戏。但是发现当时 cocos2d-x 对 Lua 的支持还存在相当多不完善的地方。所以我重写了整个 luabinding 的支持代码，解决了内存泄露、只能使用全局函数做回调等问题。</p>
 
-<p>在 cocos2d-x 2.0 发布后，luabinding 又进行了不少改进和完善。截止到 cocos2d-x 2.1.4，整个 luabinding 已经可以说是相当稳定了。所以《我是 MT》、《大掌门》这些赚钱像印钱的游戏，就纷纷才用 cocos2d-x + Lua 的解决方案了。</p>
+<p>在 cocos2d-x 2.0 发布后，luabinding 又进行了不少改进和完善。截止到 cocos2d-x 2.1.4，整个 luabinding 已经可以说是相当稳定了。所以《我是 MT》、《大掌门》这些赚钱像印钱的游戏，就纷纷采用 cocos2d-x + Lua 的解决方案了。</p>
 
 <p>可惜 cocos2d-x 团队从 2012 年以来一直在强力推广 cocos2d-x 的 JavaScript 解决方案，所以在 Lua 支持上基本上就没有什么大动作了。而从我们使用 Lua 解决方案的开发商看来，需要 luabinding 具备更强大的功能，因此这就是我们开发 quick 的最初原因。</p>
 
@@ -250,8 +250,8 @@ sprite:playAnimationForever(animation)
 <p>而我最看重其中几点：</p>
 
 <ul>
-<li><p>运行效率：LuaJIT 编译的字节码在 JIT 可用时，运行效率可以接近 C 的程度。而在 iOS 这种不支持 JIT 的环境里，Lua 相对 JavaScript 的运行效率优势完全没有可比性。</p></li>
-<li><p>是否容易扩展：Lua 从设计时就是作为嵌入式语言来设计的，所以需要将某个 C/C++ 接口导出给 Lua 使用，那是相当轻松的事情。而且还有 tolua++ 这样的成熟工具可用。</p></li>
+<li><p>运行效率：LuaJIT 编译的字节码在 JIT 可用时，运行效率可以接近 C 的程度。而在 iOS 这种不支持 JIT 的环境里，Lua 的运行效率比 JavaScript 高很多（）。</p></li>
+<li><p>是否容易扩展：Lua 从设计时就是作为嵌入式语言来设计的，所以需要将某个 C/C++ 接口导出给 Lua 使用，那是相当轻松的事情。</p></li>
 <li><p>源代码保护：LuaJIT 编译的字节码目前是无法反编译的，因为 LuaJIT 在编译时不是 1:1 直接转换源代码，而是对源代码做了相当多的深入优化。LuaJIT 编译出的字节码体积是 Lua 编译字节码的三分之一，由此可见优化程度。</p></li>
 </ul>
 
@@ -270,7 +270,7 @@ sprite:playAnimationForever(animation)
 
 <h3>学习 Lua</h3>
 
-<p>Lua 是一种简单易用的语言，比 JavaScript 还要简单一个量级。学习这种语言最好的方式就是花几天时间写代码，然后在命令行中运行。</p>
+<p>Lua 是一种简单易用的语言。学习这种语言最好的方式就是花几天时间写代码，然后在命令行中运行。</p>
 
 <p>重点：</p>
 
@@ -287,7 +287,7 @@ sprite:playAnimationForever(animation)
 
 <h3>尝试修改和完善 quick 的各个示例程序</h3>
 
-<p>用 quick-x-player（quick 里牛叉的模拟器）运行 sample 目录里的各个例子，无差别爆改。改一点就刷新一下模拟器看看效果（做过 Web 前端的童鞋感动吧，这么好的模拟器），要不了几天就成熟练工了。</p>
+<p>用 quick-x-player（quick 里牛叉的模拟器）运行 sample 目录里的各个例子，无差别爆改。改一点就按 F5（Mac 上按 CMD+R）刷新模拟器看看效果（做过 Web 前端的童鞋感动吧），要不了几天就成熟练工了。</p>
 
 <p>最常遇到的问题：</p>
 
