@@ -4,7 +4,7 @@
   <title><![CDATA[Category: cocos2d, | 我是妖怪]]></title>
   <link href="http://dualface.github.com/blog/categories/cocos2d-/atom.xml" rel="self"/>
   <link href="http://dualface.github.com/"/>
-  <updated>2013-08-01T14:54:33+08:00</updated>
+  <updated>2013-08-01T15:08:47+08:00</updated>
   <id>http://dualface.github.com/</id>
   <author>
     <name><![CDATA[YuLei Liao]]></name>
@@ -250,13 +250,13 @@ sprite:playAnimationForever(animation)
 <p>而我最看重其中几点：</p>
 
 <ul>
-<li><p>运行效率：LuaJIT 编译的字节码在 JIT 可用时，运行效率可以接近 C 的程度；cocos2d-x JavaScript binding 目前还不可能达到这个程度。而在 iOS 这种不支持 JIT 的环境里，Lua 相对 JavaScript 的运行效率优势完全没有可比性。</p></li>
-<li><p>是否容易扩展：Lua 从设计时就是作为嵌入式语言来设计的，所以需要将某个 C/C++ 接口导出给 Lua 使用，那是相当轻松的事情。而且还有 tolua++ 这样的成熟工具可用。JavaScript 目前在 cocos2d-x 是一套基于 Clang 的导出工具，不管从成熟度还是导出的操作上都和 Lua 的解决方案没有可比性。而且 JavaScript binding 在导出时由于所有基本类型都需要转换为 JavaScript 对象，所以效率也有很大损失。</p></li>
+<li><p>运行效率：LuaJIT 编译的字节码在 JIT 可用时，运行效率可以接近 C 的程度。而在 iOS 这种不支持 JIT 的环境里，Lua 相对 JavaScript 的运行效率优势完全没有可比性。</p></li>
+<li><p>是否容易扩展：Lua 从设计时就是作为嵌入式语言来设计的，所以需要将某个 C/C++ 接口导出给 Lua 使用，那是相当轻松的事情。而且还有 tolua++ 这样的成熟工具可用。</p></li>
 <li><p>源代码保护：LuaJIT 编译的字节码目前是无法反编译的，因为 LuaJIT 在编译时不是 1:1 直接转换源代码，而是对源代码做了相当多的深入优化。LuaJIT 编译出的字节码体积是 Lua 编译字节码的三分之一，由此可见优化程度。</p></li>
 </ul>
 
 
-<p>客观的说，JavaScript binding 最大的优势是以前大量的 JS 前端开发人员可以很容易的上手，而且支持 HTML5 平台。但如果从手游体验来说，Lua 毫无疑问是目前最靠谱的选择（好吧，这一句不客观，但叫得出名字的挣钱手游里有 JS 的么）。</p>
+<p>客观的说，JavaScript binding 最大的优势是以前大量的 JS 前端开发人员可以很容易的上手，而且支持 HTML5 平台。但如果从手游体验来说，Lua 的运行效率是很重要的优势。</p>
 
 <br />
 
