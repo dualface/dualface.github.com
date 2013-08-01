@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ios | 我是妖怪]]></title>
   <link href="http://dualface.github.com/blog/categories/ios/atom.xml" rel="self"/>
   <link href="http://dualface.github.com/"/>
-  <updated>2013-08-01T14:50:49+08:00</updated>
+  <updated>2013-08-01T14:54:33+08:00</updated>
   <id>http://dualface.github.com/</id>
   <author>
     <name><![CDATA[YuLei Liao]]></name>
@@ -21,6 +21,11 @@
     <content type="html"><![CDATA[<p>用过 Xcode 的都知道，Xcode 有一个非常讨厌的 bug，有时候更新资源后，真机调试发现资源还是旧的，这个时候只能 Clean 以后重新 Build。但这样非常浪费时间，特别是大一点的工程，编译一次就要几分钟。这个时候，程序员说不定就跑 moko.cc 去瞎逛了。。。</p>
 
 <p>为了提高生产力，我们需要一个脚本，在 Xcode Build 的时候强制更新资源。</p>
+
+<!-- more -->
+
+
+
 
 <br />
 
