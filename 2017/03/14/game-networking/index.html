@@ -1,0 +1,92 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta http-equiv="content-type" content="text/html; charset=utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="description"><title>Game Networking | 我是妖怪~廖宇雷</title><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/normalize/5.0.0/normalize.min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/pure-min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/0.6.0/grids-responsive-min.css"><link rel="stylesheet" type="text/css" href="/css/style.css?v=0.0.0"><link rel="stylesheet" href="//cdn.bootcss.com/font-awesome/4.7.0/css/font-awesome.min.css"><script type="text/javascript" src="//cdn.bootcss.com/jquery/3.1.1/jquery.min.js"></script><link rel="Shortcut Icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png"><link rel="alternate" type="application/atom+xml" href="/atom.xml"></head><body><div class="body_container"><div id="header"><div class="site-name"><h1 class="hidden">Game Networking</h1><a id="logo" href="/.">我是妖怪~廖宇雷</a><p class="description"></p></div><div id="nav-menu"><a href="/"><i class="fa fa-home"> 首页</i></a><a href="/archives/"><i class="fa fa-archive"> 归档</i></a><a href="/atom.xml"><i class="fa fa-rss"> 订阅</i></a></div></div><div id="layout" class="pure-g"><div class="pure-u-1 pure-u-md-3-4"><div class="content_container"><div class="post"><h1 class="post-title">Game Networking</h1><div class="post-meta">Mar 14, 2017<span> | </span><span class="category"><a href="/categories/learn/">learn</a></span><script src="https://dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js" async></script><span id="busuanzi_container_page_pv"> | <span id="busuanzi_value_page_pv"></span><span> Hits</span></span></div><a data-disqus-identifier="2017/03/14/game-networking/" href="/2017/03/14/game-networking/#disqus_thread" class="disqus-comment-count"></a><div class="post-content"><p>最近一直在学习网络游戏有关的内容。无意中发现一个极好的系列文章，由浅入深的讲解了网络游戏的很多基础知识和具体实现。</p>
+<p>这个系列文章原文发表在作者的个人网站上 <a href="http://gafferongames.com/networking-for-game-programmers/" target="_blank" rel="external">http://gafferongames.com/networking-for-game-programmers/</a> 。作者 Glenn Fiedler 在网络游戏领域是一位公认的专家，在游戏行业具有超过 15 年的经验。</p>
+<p>由于精力有限，我不可能全文翻译这个系列文章。所以我只选择一些重点来说明，相当于原文的读书笔记。</p>
+<p>这个系列文章分为几个部分：</p>
+<ul>
+<li>UDP 和 TCP 传输协议的区别，以及为什么应该选择 UDP</li>
+<li>如何在 UDP 之上实现自己的游戏通讯协议</li>
+<li>一些和网络游戏有关的扩展内容，例如浮点数的确定性和状态同步等</li>
+</ul>
+<p>我按照自己的理解重新组织了一下文章的顺序，并介绍了每篇文章的重点。</p>
+<a id="more"></a>
+<p>~</p>
+<h2 id="为什么应该选择-UDP"><a href="#为什么应该选择-UDP" class="headerlink" title="为什么应该选择 UDP"></a>为什么应该选择 UDP</h2><p>文章 <a href="http://gafferongames.com/networking-for-game-programmers/udp-vs-tcp/" target="_blank" rel="external">UDP vs. TCP</a> 详细阐述了 UDP 和 TCP 传输协议的区别，以及为什么应该在游戏里选择 UDP 作为传输协议。</p>
+<p>作者在文章里解释了 TCP/IP 的基本原理，以及 TCP 和 UDP 两种传输协议的主要区别：</p>
+<ul>
+<li>TCP<ul>
+<li>基于连接</li>
+<li>保证数据到达和数据到达的顺序</li>
+<li>自动将数据切分为包</li>
+<li>确保数据发送速度不会超过网络连接速度（堵塞控制）</li>
+<li>容易使用，读取和写入数据就像操作一个文件</li>
+</ul>
+</li>
+<li>UDP<ul>
+<li>没有连接的概念，必须自己编码实现</li>
+<li>无法保证数据确实能够到达，也无法保证数据到达的顺序，甚至可能出现重复数据</li>
+<li>需要自己切分数据为包来发送</li>
+<li>需要自己实现堵塞控制</li>
+<li>需要自己确定数据包是否丢失，并决定是否需要重新发送</li>
+</ul>
+</li>
+</ul>
+<p>相比 UDP，TCP 的使用更简单，开发者需要操心的事情更少。但对于需要快速发送数据的网络游戏来说，UDP 却是更好的选择，为什么呢？</p>
+<p>TCP 在传输数据时，如果某个数据包没能到达接收方。TCP 会强制重新发送数据，而重新发送前会有一个等待时间，并且此时新的数据也无法发送到服务器。对于快节奏的网游来说，这种等待是个障碍。因为对于服务器或者参与游戏的其他玩家来说，通常只有最新的数据有意义。所以这种发送数据失败重试的机制反倒会阻碍客户端将最新状态发送到服务器。</p>
+<p>文章里还阐述了为什么不应该混合使用 TCP 和 UDP，以及一些基础知识。</p>
+<p>接下来作者在文章 <a href="http://gafferongames.com/networking-for-game-programmers/sending-and-receiving-packets/" target="_blank" rel="external">Sending and Receiving Packets</a> 里以简洁的代码展示了如何用 UDP 发送和接收数据包。</p>
+<p>~</p>
+<h2 id="实现自己的游戏通讯协议"><a href="#实现自己的游戏通讯协议" class="headerlink" title="实现自己的游戏通讯协议"></a>实现自己的游戏通讯协议</h2><p>由于 UDP 是无连接状态的，所以首先需要解决连接状态的确认问题。文章 <a href="http://www.gafferongames.com/networking-for-game-programmers/virtual-connection-over-udp" target="_blank" rel="external">Virtual Connection over UDP</a> 前面部分阐述了数据包在网络上是如何传输的，让读者明白为什么 UDP 传输时无法保证数据包到达的可靠性和到达顺序。</p>
+<p>接下来作者从最简单的 Peer-to-Peer 开始，讲解如何设计一个自己的数据包结构：</p>
+<ul>
+<li>在数据包中插入协议标识符（protocol id），让接收方可以过滤掉无关的 UDP 数据包</li>
+<li>分析数据包的来源 IP，确定什么时候创建一个虚拟连接的内部状态</li>
+<li>利用超时来确定虚拟连接的断开</li>
+</ul>
+<p>然后就是 UDP 最复杂的部分了。文章 <a href="http://www.gafferongames.com/networking-for-game-programmers/reliability-and-flow-control" target="_blank" rel="external">Reliability, Ordering and Congestion Avoidance over UDP</a> 阐述使用 UDP 传输数据时如何处理可靠性、包顺序和堵塞控制。</p>
+<p>通过自己设计的数据包格式来解决可靠性、数据顺序：</p>
+<ul>
+<li>在数据包中添加序列号（sequence）。发送方每次发送一个新数据包时，就增加 <code>seq</code>。接收方通过比较收到数据包的 <code>seq</code> 和记录到的最大 <code>seq</code>，就知道一个数据包是不是最新的。</li>
+<li>在数据包中添加确认序列号（acknowledge）。发送方每次发送一个数据包时，<code>ack</code> 会保存发送方收到的最新数据包的 <code>seq</code>。</li>
+</ul>
+<p>利用 <code>seq</code> 和 <code>ack</code>，发送方和接受方都可以检查收到的数据包是不是最新的，也可以知道自己发送的数据包是不是已经被发送收到。</p>
+<p>考虑到 UDP 可能丢失多个数据包，所以还需要添加 <code>ack bitfield</code> 到数据包中。通过设置  <code>unsigned int</code> 位的方式，让接收方知道上一次发送的数据包有哪些已经收到。配合超时策略，发送方就知道哪些数据包没有到达接收方，从而可以决定是否要重新发送丢失的数据包（但发送时仍然使用最新的 <code>seq</code>）。</p>
+<p>最后，文章阐述了一种简单的度量方法。利用发送 <code>seq</code> 和收到相同 <code>ack</code> 之间的时间差来计算网络的速率。并在速率下降时，降低发送的频率，而在速率正常后恢复到正常的发送频率。</p>
+<p>整篇文章利用一些简单的机制，实现了一个初步的解决方案。虽然离实际应用还有不少距离，但对于理解和学习却非常有价值。</p>
+<p>要完整学习如何设计网络游戏的数据协议，可以阅读系列文章 <a href="http://gafferongames.com/building-a-game-network-protocol/" target="_blank" rel="external">Building a Game Network Protocol</a> 。</p>
+<p>~</p>
+<h2 id="和网络游戏有关的扩展内容"><a href="#和网络游戏有关的扩展内容" class="headerlink" title="和网络游戏有关的扩展内容"></a>和网络游戏有关的扩展内容</h2><p>网络游戏的调试是个很复杂的问题。文章 <a href="http://www.gafferongames.com/networking-for-game-programmers/debugging-multiplayer-games" target="_blank" rel="external">Debugging Multiplayer Games</a> 里告诉你很多游戏集成多人玩法之所以失败是因为团队抱着 <strong>focus on the singleplayer experience</strong> 的错误想法来做，所以在需要集成多人玩法时就懵逼了。作者以他多年的经验告诉我们：<strong>debugging multiplayer games is hard</strong>。最后，看起来作者开了一个新坑，不过这个新的系列还没任何内容。</p>
+<p><a href="http://www.gafferongames.com/networking-for-game-programmers/floating-point-determinism" target="_blank" rel="external">Floating Point Determinism</a> 这篇文章也是我过去曾经反复探寻过的一个问题，如何在不同平台间保证浮点数的确定性。</p>
+<p>当时我想做一个 1v1 的双人对战物理游戏。很显然，不可能让两个玩家互相发送所有物理世界的数据，只能是发送玩家的操作和时间等数据，然后在两个客户端里分别模拟物理效果。但我在网上找了一大圈，没找到合适的解决方案，最后放弃了这个游戏的想法。</p>
+<p>由于物理引擎依赖于大量的浮点计算，所以这个问题是实现网络物理游戏的关键。这篇文章，作者也没提出具体的解决方案，但他提供了大量他搜集和整理的资料供我们参考。</p>
+<p>总结而言，跨平台的网络物理游戏，需要考虑处理器（AMD、Intel、ARM）、编译器，第三方库等各种问题，才能保证在不同平台（客户端和服务端肯定是不同平台）之间的浮点数确定性。</p>
+<p>~</p>
+<p>最后一篇，<a href="http://www.gafferongames.com/networking-for-game-programmers/what-every-programmer-needs-to-know-about-game-networking" target="_blank" rel="external">What Every Programmer Needs To Know About Game Networking</a> 介绍了一些网络游戏常用的同步策略，以及优化用户体验的方法。</p>
+<p>文章里提到了两种基本的策略：</p>
+<ul>
+<li><p>Lockstep：在每一次游戏状态同步期间，都同步所有玩家的状态。这样做的好处是实现简单，但坏处则是任何一个玩家和服务器之间的网络连接不好，就会导致整个游戏世界停顿。</p>
+</li>
+<li><p>Client/Server：客户端只管把自己的操作发给服务端。服务端负责更新所有玩家的状态，然后广播给所有客户端。这样做的好处是客户端相当于一个只有输入和显示的哑终端，所有状态更新操作都在服务端进行。坏处就是由于客户端和服务端之间必然存在的网络延迟，玩家会觉得自己的操作总是要慢一拍才能反映在画面上。</p>
+</li>
+</ul>
+<p>不过 Client/Server 策略结合客户端预测（Client-Side Prediction）技术，就可以很大程度上解决 Client/Server 策略的体验问题。</p>
+<p>当玩家在客户端做出操作时，对于一些确定性的操作，例如前进、转身，客户端可以立即更新画面状态。当服务端返回的数据到达客户端时，通过计算时间差和比较状态，再来决定是维持客户端已经更新的状态，还是修正客户端的状态。</p>
+<p>例如在 WOW 里，如果网速很差，我们经常会发现跑了一段路以后，却突然瞬移了一下位置。就是客户端根据服务端传回的数据对客户端状态进行了修正。</p>
+<p>这篇文章虽然没有提到具体的方法，但为我们介绍了当今主流网游采用的数据同步策略。</p>
+<p>~</p>
+<p>总的来说，这个作者不但经验丰富，更是能把复杂的问题分解为相对容易理解的小块写成文章让读者看明白。</p>
+<p>作者网站上还有大量与网络游戏相关的内容，还有一些相关的开源项目，建议对网络游戏有兴趣的同学深入发掘一下。</p>
+<p>-EOF-</p>
+</div><script type="text/javascript" src="/js/share.js?v=0.0.0" async></script><a data-url="http://liaoyulei.cn/2017/03/14/game-networking/" data-id="cj2hd7xv80006tr9kx865if0z" class="article-share-link">分享到</a><div class="tags"><a href="/tags/network/">network</a><a href="/tags/server/">server</a></div><div class="post-nav"><a href="/2017/05/08/fix-unity-tilemap-gap/" class="pre">彻底解决 Unity 中 Tilemap 缝隙问题</a><a href="/2017/01/09/fork-same-repo-twice/" class="next">在 Github 上 fork 同一个仓库两次</a></div><div id="disqus_thread"><script>var disqus_shortname = 'dualface';
+var disqus_identifier = '2017/03/14/game-networking/';
+var disqus_title = 'Game Networking';
+var disqus_url = 'http://liaoyulei.cn/2017/03/14/game-networking/';
+(function() {
+  var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+  dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+  (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();</script><script id="dsq-count-scr" src="//dualface.disqus.com/count.js" async></script></div></div></div></div><div class="pure-u-1-4 hidden_mid_and_down"><div id="sidebar"><div class="widget"><form action="//www.google.com/search" method="get" accept-charset="utf-8" target="_blank" class="search-form"><input type="text" name="q" maxlength="20" placeholder="Search"/><input type="hidden" name="sitesearch" value="http://liaoyulei.cn"/></form></div><div class="widget"><div class="widget-title"><i class="fa fa-folder-o"> 分类</i></div><ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/guide/">guide</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/learn/">learn</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/tips/">tips</a><span class="category-list-count">6</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/videos/">videos</a><span class="category-list-count">1</span></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-star-o"> 标签</i></div><div class="tagcloud"><a href="/tags/server/" style="font-size: 15px;">server</a> <a href="/tags/php/" style="font-size: 15px;">php</a> <a href="/tags/java/" style="font-size: 15px;">java</a> <a href="/tags/netty/" style="font-size: 15px;">netty</a> <a href="/tags/unity/" style="font-size: 15px;">unity</a> <a href="/tags/git/" style="font-size: 15px;">git</a> <a href="/tags/github/" style="font-size: 15px;">github</a> <a href="/tags/network/" style="font-size: 15px;">network</a> <a href="/tags/pdf/" style="font-size: 15px;">pdf</a> <a href="/tags/redis/" style="font-size: 15px;">redis</a> <a href="/tags/vscode/" style="font-size: 15px;">vscode</a> <a href="/tags/tools/" style="font-size: 15px;">tools</a> <a href="/tags/c/" style="font-size: 15px;">c#</a> <a href="/tags/ios/" style="font-size: 15px;">ios</a> <a href="/tags/html5/" style="font-size: 15px;">html5</a> <a href="/tags/javascript/" style="font-size: 15px;">javascript</a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-file-o"> 最新文章</i></div><ul class="post-list"><li class="post-list-item"><a class="post-list-link" href="/2017/05/08/fix-unity-tilemap-gap/">彻底解决 Unity 中 Tilemap 缝隙问题</a></li><li class="post-list-item"><a class="post-list-link" href="/2017/03/14/game-networking/">Game Networking</a></li><li class="post-list-item"><a class="post-list-link" href="/2017/01/09/fork-same-repo-twice/">在 Github 上 fork 同一个仓库两次</a></li><li class="post-list-item"><a class="post-list-link" href="/2017/01/04/first-netty-app/">第一个 Netty 应用</a></li><li class="post-list-item"><a class="post-list-link" href="/2016/12/24/php-builtin-webserver-indexfiles/">为 PHP 内置 WebServer 提供目录和文件索引</a></li><li class="post-list-item"><a class="post-list-link" href="/2016/12/24/create-chinese-pdf/">用 PHP 创建中文 PDF 的最简单方法</a></li><li class="post-list-item"><a class="post-list-link" href="/2016/12/23/php-redis-intro/">[视频] PHP 使用 Redis 入门</a></li><li class="post-list-item"><a class="post-list-link" href="/2016/12/21/wrap-html5-ios-native/">在 iOS 中将 HTML5 App 封装为原生应用</a></li><li class="post-list-item"><a class="post-list-link" href="/2016/12/21/unity-vscode/">在 Mac 下配置 Visual Studio Code 为 Unity 代码编辑器</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-comment-o"> 最近评论</i></div><script type="text/javascript" src="//dualface.disqus.com/recent_comments_widget.js?num_items=5&amp;hide_avatars=1&amp;avatar_size=32&amp;excerpt_length=20&amp;hide_mods=1"></script></div><div class="widget"><div class="widget-title"><i class="fa fa-external-link"> 友情链接</i></div><ul></ul><a href="https://github.com/dualface" title="GitHub" target="_blank">GitHub</a><ul></ul><a href="http://weibo.com/dualface" title="我的微博" target="_blank">我的微博</a><ul></ul><a href="http://i.youku.com/liaoyulei" title="我的视频集锦" target="_blank">我的视频集锦</a></div></div></div><div class="pure-u-1 pure-u-md-3-4"><div id="footer">© <a href="/." rel="nofollow">我是妖怪~廖宇雷.</a> Powered by<a rel="nofollow" target="_blank" href="https://hexo.io"> Hexo.</a><a rel="nofollow" target="_blank" href="https://github.com/tufu9441/maupassant-hexo"> Theme</a> by<a rel="nofollow" target="_blank" href="https://github.com/pagecho"> Cho.</a></div></div></div><a id="rocket" href="#top" class="show"></a><script type="text/javascript" src="/js/totop.js?v=0.0.0" async></script><script type="text/javascript" src="//cdn.bootcss.com/fancybox/2.1.5/jquery.fancybox.pack.js" async></script><script type="text/javascript" src="/js/fancybox.js?v=0.0.0" async></script><link rel="stylesheet" type="text/css" href="/css/jquery.fancybox.css?v=0.0.0"><script>(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+ga('create','UA-89210507-1','auto');ga('send','pageview');
+</script><script type="text/javascript" src="/js/codeblock-resizer.js?v=0.0.0"></script><script type="text/javascript" src="/js/smartresize.js?v=0.0.0"></script></div></body></html>

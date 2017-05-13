@@ -1,2525 +1,560 @@
 <?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
-
-  <title><![CDATA[我是妖怪]]></title>
-  <link href="http://dualface.github.com/atom.xml" rel="self"/>
-  <link href="http://dualface.github.com/"/>
-  <updated>2013-08-02T13:41:00+08:00</updated>
-  <id>http://dualface.github.com/</id>
+  <title>我是妖怪~廖宇雷</title>
+  
+  <link href="/atom.xml" rel="self"/>
+  
+  <link href="http://liaoyulei.cn/"/>
+  <updated>2017-05-13T12:09:44.000Z</updated>
+  <id>http://liaoyulei.cn/</id>
+  
   <author>
-    <name><![CDATA[YuLei Liao]]></name>
-    <email><![CDATA[dualface@gmail.com]]></email>
+    <name>廖宇雷</name>
+    
   </author>
-  <generator uri="http://octopress.org/">Octopress</generator>
-
+  
+  <generator uri="http://hexo.io/">Hexo</generator>
   
   <entry>
-    <title type="html"><![CDATA[cocos2d-x 3.0 新的渲染架构]]></title>
-    <link href="http://dualface.github.com/blog/2013/08/02/cocos2dx-v3-rendering-pipeline/"/>
-    <updated>2013-08-02T13:00:00+08:00</updated>
-    <id>http://dualface.github.com/blog/2013/08/02/cocos2dx-v3-rendering-pipeline</id>
-    <content type="html"><![CDATA[<p>8月1号这一天，<a href="http://weibo.com/cocos2dx">cocos2d-x 官方微博</a>上说 x 团队正在纠结是否用智能指针替换现有的引用计数内存管理机制，结果引发大家的争论。</p>
-
-<p>在我看来，引发这个争论的原因是 cocos2d-x 打算实现多线程化，从而充分利用现代智能手机的多核处理器资源。而多线程化的一个最重大需求，应该就是 cocos2d-x 3.0 新的渲染架构了。</p>
-
-<!-- more -->
-
-
-<p>cocos2d-x 3.0 的渲染架构设计来自 Zynga（<a href="https://docs.google.com/document/d/1nDX131S-k_XwKHkh7CjP4yC4pmywLk8Do3kMtyrRYwI/edit?usp=sharing&amp;pli=1">原始设计文档</a>，需翻墙）。在这个架构设计中，游戏将分为两个主要的线程：main thread 和 draw thread。</p>
-
+    <title>彻底解决 Unity 中 Tilemap 缝隙问题</title>
+    <link href="http://liaoyulei.cn/2017/05/08/fix-unity-tilemap-gap/"/>
+    <id>http://liaoyulei.cn/2017/05/08/fix-unity-tilemap-gap/</id>
+    <published>2017-05-08T02:32:07.000Z</published>
+    <updated>2017-05-13T12:09:44.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>最近在使用 Unity 开发一个独立游戏，游戏里用到了 Tilemap。但却遇到一个让人很郁闷的问题，就是拼接的地图总是有随机出现的缝隙。</p>
+<img src="/2017/05/08/fix-unity-tilemap-gap/01.png" alt="01.png" title="">
+<p>经过网络搜索和自己摸索，总结了几条解决此问题的技巧。</p>
+<blockquote>
+<p>这里有一点要提醒：因为我的游戏是像素风，所以修改下面两项设置可以获得很好的效果。如果是非像素风的游戏，那不应该修改下面两项设置，而是应该直接按照本文最后的方法对图片进行边缘扩展。</p>
+</blockquote>
+<a id="more"></a>
+<p>首先，确保你的图片宽度和高度是偶数。然后对 Unity 进行如下设置：</p>
 <ul>
-<li><p>main thread 运行游戏的逻辑代码，例如在场景的 update() 函数中改变角色位置、在 schedule selector 函数中创建新敌人等等。</p>
-
-<p>main thread 中的代码会改变 Scene 中的 Node Tree，但并不实际执行 OpenGL 渲染操作。作为替代，main thread 将绘图操作转换为一系列的 draw command，发送到一个 queue 中。</p></li>
-<li><p>draw thread 则在每一帧绘制前，从 queue 里提取 draw command，然后进行优化，再转换为实际的 OpenGL 渲染操作。</p></li>
-</ul>
-
-
-<p><img src="http://dualface.github.com/upload/cocos2dx-v3-rendering-pipeline/01.png" alt="" /></p>
-
-<p>在单线程架构中，游戏逻辑和渲染操作是顺序执行的。两者消耗的时间加起来如果超过 1/60 秒，就会导致游戏出现卡顿现象。</p>
-
-<p>分成多线程后，main thread 有更多的时间来执行游戏逻辑。而 draw thread 也有更多的时间做优化和渲染操作，例如实现 automatic batching。</p>
-
-<br />
-
-
-<h2>新渲染架构可能的实现方案</h2>
-
-<p>Zynga 的设计文档并没有给出细节实现原理，我就以大家讨论的内容整理了一个可能的方案。</p>
-
-<ul>
-<li><p>main thread 会每 1/60 秒的频率调用 Scene::drawScene() 方法。这个方法有如下步骤：</p>
-
-<ol>
-<li>发送一个 begin command 到一个 command queue</li>
-<li>update() 执行所有的 schedule selector 和 event listener，游戏逻辑大部分就在其中。</li>
-<li>扫描整个 Node Tree，构造一系列 draw command，并发送到 queue</li>
-<li>发送一个 end command 到 queue，形成一个完整的 commands list</li>
-</ol>
-
-
-<p>如果某次 drawScene() 消耗的时间超过 1/60 秒，则无需等待，立即开始下一次 drawScene() 调用。这样确保游戏的逻辑能够以最高 60fps 运行，但又不会超过 60fps。</p></li>
-<li><p>draw thread 按照如下步骤以最快 1/60 秒的频率执行：</p>
-
-<ol>
-<li>从 queue 中找出最后一组 list（如果 draw thread 每次绘图消耗时间超过 1/60 秒，queue 中就可能包含多组 list，放弃之前的 list 可以确保画面符合最近的游戏状态）。</li>
-<li>对 list 进行处理，执行画面渲染。</li>
-<li>更新 queue，删除已绘制的 list 及其之前的所有 list。</li>
-</ol>
+<li><p>选中图片，将图片的 <strong>Filter Mode</strong> 指定为 <strong>Point (no filter)</strong></p>
+<img src="/2017/05/08/fix-unity-tilemap-gap/remove-filter.png" alt="remove-filter.png" title="">
 </li>
-<li><p>Texture 对象不再保存材质的实际数据，改为保存一个 texture id。材质的实际数据由 draw thread 进行管理。</p>
-
-<p>当加载一个材质文件时，main thread 中构造一个新的 Texture 对象，并获得一个新的 texture id。然后发送 load texture command，并将材质文件名和 texture id 作为 command 的参数传递给 draw thread。draw thread 可以在自己线程里载入材质数据，或新开线程载入数据。</p>
-
-<p>当一个 Texture 被 Sprite 使用时，增加 Texture 对象的引用计数。而使用该 Texture 的 Sprite 删除时，则减小引用计数。如果 TextureCache 需要释放不再引用计数为 0 的 Texture 对象，就发送 release texture command。</p></li>
-<li><p>在 cocos2d-x 2.x 版中，CCNode 包含了位置、大小、缩放、旋转等信息，以及 OpenGL 绘图需要的数据。</p>
-
-<p>在新架构里，main thread 维护的 Node Tree 中，Node 不再包含 OpenGL 绘图需要的数据。而是在构造 Node、改变 Node 状态时，才将 Node 的状态数据发送给 draw thread。</p>
-
-<p>draw thread 根据 node id 维护 node 的绘图数据。</p>
-
-<p>如果 main thread 执行后，Node 的状态没有发生改变，就无需发送该 Node 的 draw command，也就避免了 draw thread 对没有发生变化的 Node 重新计算绘图数据。</p></li>
+<li><p>选择菜单 Edit -&gt; Project Settings -&gt; Quality，打开 QualitySettings 设置。在这里选中每一个级别，将其中的 <strong>Anisotropic Textures</strong> 和 <strong>Anti Aliasing</strong> 都指定为 <strong>Disabled</strong>。</p>
+<img src="/2017/05/08/fix-unity-tilemap-gap/disable-anti-aliasing.png" alt="disable-anti-aliasing.png" title="">
+</li>
 </ul>
-
-
-<br />
-
-
-<h2>cocos2d-x 3.0 必须要实现线程安全？</h2>
-
-<p>在整个设计里，main thread 不停的往 command queue 追加数据，而 draw thread 每完成一次画面渲染就清理一次 command queue。因此 queue 的实现必须是线程安全的，主要的操作都应该满足原子性要求。</p>
-
-<p>但从这个设计看，只要保证两点，那么 main thread 里的对象是不是线程安全根本无所谓：</p>
-
-<ol>
-<li>queue 是线程安全的</li>
-<li>draw thread 不使用自动释放的引用计数对象</li>
-</ol>
-
-
-<p>所以这样一番分析后，感觉 cocos2d-x 3.0 要多线程化，就不一定要做大改动。</p>
-
-<p>但实际上 cocos2d-x 3.0 里还需要多线程完成异步 IO（例如网络）、异步计算等等。而且提供一个可靠的线程安全架构，也方便开发者创建线程来优化游戏体验（比如把 AI 算法放入单独的线程）。</p>
-
-<p>所以从整体架构上看，cocos2d-x 3.0 实现线程安全还是很有必要的。但实现线程安全是否就一定要用智能指针吗？这个我会另外写一篇文章来探讨此问题。</p>
-
-<p>最后，欢迎大家多多提意见。</p>
-
-<p>- END -</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[初窥 quick-cocos2d-x]]></title>
-    <link href="http://dualface.github.com/blog/2013/07/31/quick-first-time/"/>
-    <updated>2013-07-31T19:51:00+08:00</updated>
-    <id>http://dualface.github.com/blog/2013/07/31/quick-first-time</id>
-    <content type="html"><![CDATA[<p>quick-cocos2d-x（后文简称 quick）与 cocos2d-x 的关系，用一句话概括：quick 是 cocos2d-x 针对 Lua 的豪华套装威力加强版。</p>
-
-<p>项目地址：<a href="https://github.com/dualface/quick-cocos2d-x">quick-cocos2d-x</a>
-项目 Wiki: <a href="https://github.com/dualface/quick-cocos2d-x/wiki">wiki</a></p>
-
-<p>那 quick 与 cocos2d-x 相比到底有什么区别，又有什么加强呢？这篇文章就是答案：</p>
-
-<ol>
-<li>为什么会有 quick</li>
-<li>quick 和 cocos2d-x 的差别</li>
-<li>quick 由哪些部分组成</li>
-<li>应该选择 Lua 还是 JavaScript</li>
-<li>怎么入门 quick</li>
-</ol>
-
-
-<!-- more -->
-
-
-
-
-<br />
-
-
-<h2>为什么会有 quick</h2>
-
-<p>cocos2d-x 是一个用 C++ 开发的游戏引擎，其架构设计和 API 基本上是照搬的 cocos2d-iphone（一个用 Objective-C 的 iOS 游戏开发引擎）。</p>
-
-<p>由于 C++ 对开发人员要求较高，所以网龙科技利用 tolua++ 这个工具，将 cocos2d-x 的 C++ 接口转为了 Lua 接口（这种将 C++ 接口导出为 Lua 接口的库通常称为 luabinding）。让开发者可以使用 Lua 这种简单易懂的脚本语言来编写游戏，从而大大提高开发效率。</p>
-
-<p>大概在 2012 年上半年，我们公司开始使用 cocos2d-x + Lua 来开发游戏。但是发现当时 cocos2d-x 对 Lua 的支持还存在相当多不完善的地方。所以我重写了整个 luabinding 的支持代码，解决了内存泄露、只能使用全局函数做回调等问题。</p>
-
-<p>在 cocos2d-x 2.0 发布后，luabinding 又进行了不少改进和完善。截止到 cocos2d-x 2.1.4，整个 luabinding 已经可以说是相当稳定了。所以《我是 MT》、《大掌门》这些赚钱像印钱的游戏，就纷纷采用 cocos2d-x + Lua 的解决方案了。</p>
-
-<p>可惜 cocos2d-x 团队从 2012 年以来一直在强力推广 cocos2d-x 的 JavaScript 解决方案，所以在 Lua 支持上基本上就没有什么大动作了。而从我们使用 Lua 解决方案的开发商看来，需要 luabinding 具备更强大的功能，因此这就是我们开发 quick 的最初原因。</p>
-
-<p>quick 的目标：</p>
-
-<ol>
-<li>降低学习曲线</li>
-<li>提高易用性</li>
-<li>创建一个精简、但更容易扩展的架构</li>
-</ol>
-
-
-<br />
-
-
-<h2>quick 和 cocos2d-x 的差别</h2>
-
-<p>虽然 cocos2d-x luabinding 已经很完善了，但是要开发一个游戏，我们还需要做许多基础工作。</p>
-
-<ul>
-<li><p>将 luabinding 导出的 C++ 接口重新封装成 Lua 风格的接口是最基本的工作。重新封装后的接口应该更容易学习和使用，并且一些 C++ 和 Lua 之间数据格式转换也应该隐藏起来。而这就是 quick 里首先实现的目标。</p>
-
-<p>看看下面的代码：</p>
-
-<pre><code>-- 载入 Sprite Sheet
-local frameCache = CCSpriteFrameCache:sharedSpriteFrameCache()
-frameCache:addSpriteFramesWithFile("Sprites.plist", "Sprites.png")
-
--- 构造一个帧动画序列 Run0001.png -&gt; Run0010.png
-local frames = CCArray:create()
-for index = 1, 10 do
-    local frameName = string.format("Run%04d.png", index)
-    local frame = frameCache:spriteFrameByName(frameName)
-    frames:addObject(frame)
-end
-
--- 创建 CCSprite 对象
-local firstFrame = tolua.cast(frames:objectAtIndex(0), "CCSpriteFrame")
-local sprite = CCSprite:createWithSpriteFrame(firstFrame)
-
--- 在 CCSprite 之上播放动画（用 0.5 秒播放完 10 帧）
-local animation = CCAnimation:createWithSpriteFrames(frames, 0.5 / 10)
-sprite:runAction(CCRepeatForever:create(CCAnimate:create(animation)))
-</code></pre>
-
-<p>这段代码的功能在游戏中会反复出现，所以通常会封装成几个简单的函数。而 quick 里封装后的接口要完成同样功能会使用如下代码：</p>
-
-<pre><code>display.addSpriteFramesWithFile("Sprites.plist", "Sprites.png")
-local frames = display.newFrames("Run%04d.png", 1, 10)
-local sprite = display.newSpriteWithFrame(frames[1])
-local animation = display.newAnimation(frames, 0.5 / 10)
-sprite:playAnimationForever(animation)
-</code></pre>
-
-<p>通过这个对比，可以看出二次封装是多么必要。而 quick 提供了一个 Lua Framework，封装了大量最常用的接口。</p></li>
-<li><p>cocos2d-x 是一个功能完善的游戏引擎，但对于一个能挣钱的游戏来说，cocos2d-x 还缺少很多必须的功能。所以 quick 在 cocos2d-x 基础上添加了更多游戏必须的功能，例如完善的 HTTP 和 Socket 网络功能、数据加密解密、设备功能访问等等。</p></li>
-<li><p>游戏的玩法做得差不多了，就需要开始集成付费充值、统计、社会化分享、好友链等各种第三方 SDK。</p>
-
-<p>在 iOS 和 Android 平台上做这些工作，传统做法是分别编写 Objective-C 和 Java 的接口代码，然后再用 C++ 中转，借助 tolua++ 导出给 Lua 使用。这种做法不但繁琐，而且像 Java 和 C++ 的交互存在相当多的困难，所以开发效率极低。</p>
-
-<p>quick 针对这个问题，特别开发了 LuaObjectiveCBridge 和 LuaJavaBridge 两个模块。利用这两个模块，我们在接入 SDK 时，就不再需要 C++ 中转层，也不需要 tolua++，由此省下的工作量相当惊人。</p>
-
-<p>而且 quick 的附属项目会提供大量现成的 SDK 封装，进一步提高开发效率，让开发商把主要的资源花在游戏玩法上。</p></li>
-<li><p>在开发过程中，需要不断测试。而 cocos2d-x 自带的 Windows 和 Mac 模拟器功能太简单。quick 特别开发了功能完备的模拟器，让整个游戏在开发阶段的大部分时间里都不需要借助真机就可以进行（小伙伴们都知道，Android 真机调试那么是多么的蛋疼）。</p>
-
-<p>看看 quick 华丽的模拟器吧 :)</p>
-
-<p><img src="http://dualface.github.com/upload/quick_architecture/player_01.png" alt="" /></p></li>
-<li><p>除了上述内容，quick 里还包含了物理引擎 Chipmunk 2D 的 Lua 封装（相信我，你不可能找到比这个更容易使用的物理引擎接口）、骨骼动画播放（支持 DragonBones、CocoStudio）、高性能的 LuaJIT 虚拟机等等。</p></li>
-</ul>
-
-
-<p>总结而言，quick 和 cocos2d-x 的主要区别有如下几点：</p>
-
-<ol>
-<li>更完善的 Lua 支持，包括一个 Lua 框架对 C++ 接口进行了二次封装</li>
-<li>补充了大量 cocos2d-x 没有提供，但游戏需要的功能</li>
-<li>为提高开发效率，提供了 Objective-C 和 Java 的桥接模块，以及强化的 Windows/Mac 模拟器</li>
-</ol>
-
-
-<p>除了这些重大区别外，quick 还在细节上做了一些调整和完善。并且后续还会将来自 cocos2d-x 最新开发分支（devel 3.0）的一些重要 bugfix 和有价值的新功能移植到 quick 中。</p>
-
-<p>当然，当 cocos2d-x 3.0 完全稳定下来的时候，quick 也会做相应的升级。</p>
-
-<br />
-
-
-<h1>quick 由哪些部分组成</h1>
-
-<p>quick 由几个主要部分组成：</p>
-
-<ul>
-<li>cocos2d-x：目前基于 cocos2d-x 2.1.4 版本</li>
-<li>tolua++：用于将 C++ 接口导出给 Lua 脚本使用</li>
-<li>LuaJIT：最快的 Lua 虚拟机</li>
-<li>cocos2d-x-extra：扩展功能，包括数据加密编码、网络传输、设备功能访问等</li>
-<li>Chipmunk 2D：物理引擎，以及相应的 cocos2d-x 和 Lua 封装接口</li>
-<li>CSArmature：一个骨骼动画播放库，支持 DragonBones 和 CocoStudio 创建的骨骼动画</li>
-</ul>
-
-
-<p>除此之外，还包含一些 Lua 的扩展：</p>
-
-<ul>
-<li>lua_extensions：一些必备的 Lua 模块，包括 JSON、ZLib、LuaFileSystem、LuaSocket 等</li>
-<li>LuaJavaBridge：简单的 Lua - Java 交互接口，简化 SDK 集成</li>
-<li>LuaObjectiveCBridge：简单的 Lua - Objective-C 交互接口</li>
-</ul>
-
-
-<br />
-
-
-<h2>应该选择 Lua 还是 JavaScript</h2>
-
-<p>目前 cocos2d-x 支持两种脚本语言的 binding，从我个人了解，各自的情况列表如下：</p>
-
-<table>
-<thead>
-<tr>
-<th>Features </th>
-<th> Lua </th>
-<th> JavaScript</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>完全访问 cocos2d-x API </td>
-<td> YES </td>
-<td> YES</td>
-</tr>
-<tr>
-<td>iOS 平台 </td>
-<td> YES </td>
-<td> YES</td>
-</tr>
-<tr>
-<td>Android 平台 </td>
-<td> YES </td>
-<td> YES</td>
-</tr>
-<tr>
-<td>Windows 平台 </td>
-<td> YES </td>
-<td> YES</td>
-</tr>
-<tr>
-<td>Mac 平台 </td>
-<td> YES </td>
-<td> YES</td>
-</tr>
-<tr>
-<td>Linux 平台 </td>
-<td> YES* </td>
-<td> YES</td>
-</tr>
-<tr>
-<td>HTML5 平台 </td>
-<td> NO </td>
-<td> YES</td>
-</tr>
-<tr>
-<td>JIT 支持 </td>
-<td> YES </td>
-<td> YES</td>
-</tr>
-<tr>
-<td>编译为字节码 </td>
-<td> YES </td>
-<td> YES</td>
-</tr>
-<tr>
-<td>字节码是否可以反编译 </td>
-<td> NO </td>
-<td> NO</td>
-</tr>
-<tr>
-<td>运行性能 </td>
-<td> HIGH </td>
-<td> LOW</td>
-</tr>
-<tr>
-<td>接入 SDK 工作量 </td>
-<td> 简单 </td>
-<td> 复杂，通过 C++ 中转</td>
-</tr>
-<tr>
-<td>导出自定义 C++ 类 </td>
-<td> 简单 </td>
-<td> 复杂</td>
-</tr>
-</tbody>
-</table>
-
-
-<p>而我最看重其中几点：</p>
-
-<ul>
-<li><p>运行效率：LuaJIT 编译的字节码在 JIT 可用时，运行效率可以接近 C 的程度。而在 iOS 这种不支持 JIT 的环境里，Lua 的运行效率比 JavaScript 高很多（）。</p></li>
-<li><p>是否容易扩展：Lua 从设计时就是作为嵌入式语言来设计的，所以需要将某个 C/C++ 接口导出给 Lua 使用，那是相当轻松的事情。</p></li>
-<li><p>源代码保护：LuaJIT 编译的字节码目前是无法反编译的，因为 LuaJIT 在编译时不是 1:1 直接转换源代码，而是对源代码做了相当多的深入优化。LuaJIT 编译出的字节码体积是 Lua 编译字节码的三分之一，由此可见优化程度。</p></li>
-</ul>
-
-
-<p>客观的说，JavaScript binding 最大的优势是以前大量的 JS 前端开发人员可以很容易的上手，而且支持 HTML5 平台。但如果从手游体验来说，Lua 的运行效率是很重要的优势。</p>
-
-<br />
-
-
-<h2>怎么入门 quick</h2>
-
-<p>东西再好，学不会也是白搭，所以这篇文章的重点是这个部分，前面都是广告 :)</p>
-
-<br />
-
-
-<h3>学习 Lua</h3>
-
-<p>Lua 是一种简单易用的语言。学习这种语言最好的方式就是花几天时间写代码，然后在命令行中运行。</p>
-
-<p>重点：</p>
-
-<ul>
-<li>table 在 Lua 中是一种万能数据结构，既可以表示数组，又可以表示名值对。这和 PHP 里的 array 一样。唯一的区别在于 table 用作数组时，第一个元素的下标是从 1 开始。</li>
-<li>function 在 Lua 里是 first-class 类型，也就是说你可以把一个 function 当做普通值，传递来传递去，这和其他函数式编程语言是一样的，例如 JavaScript。</li>
-<li>Lua 里用 table 配合 metatable 实现面向对象。由于 C++ 对象导出到 Lua 里后就是这样的机制，所以这个一定要搞明白。</li>
-<li>搞清楚在定义方法和调用方法的时候，用“.”和“:”的区别。</li>
-</ul>
-
-
-<br />
-
-
-<h3>尝试修改和完善 quick 的各个示例程序</h3>
-
-<p>用 quick-x-player（quick 里牛叉的模拟器）运行 sample 目录里的各个例子，无差别爆改。改一点就按 F5（Mac 上按 CMD+R）刷新模拟器看看效果（做过 Web 前端的童鞋感动吧），要不了几天就成熟练工了。</p>
-
-<p>最常遇到的问题：</p>
-
-<ul>
-<li><p>这个方法返回了一个什么对象？</p>
-
-<p>因为 quick 里对 C++ 接口进行了二次封装，所以一些框架的方法返回的对象不一定很明确。但大多数可以从方法名上推测出来：</p>
-
-<ul>
-<li>display.newSprite() 创建 CCSprite 对象</li>
-<li>display.newFrames() 创建包含多个 CCSpriteFrame 对象的数组</li>
-<li>ui.newImageMenuItem() 创建 CCImgeMenuItem 对象</li>
-<li>ui.newMenu() 创建 CCMenu 对象</li>
-</ul>
-
-
-<p>实在看不出来，那就去 framework 目录里翻源代码吧。</p></li>
-<li><p>这个方法是干嘛的？</p>
-
-<p>首先，从 framework 里找。找不到就去 cocos2d-x 里找。还找不到，那就是 cocos2d-x-extra 或者第三方库提供的方法。这里强烈推荐 Sublime Text 这个超神的编辑器，全文检索神马的完全不在话下。</p></li>
-<li><p>为什么代码没有预期的效果？</p>
-
-<p>不管是 Lua 还是 quick，当前的版本都非常非常稳定。所以遇到这种情况，不要首先怀疑语言特征或者引擎，而是多做测试，看看问题到底是怎么发生的。</p></li>
-<li><p>在哪里寻求帮助？</p>
-
-<p>目前 quick 还没有专门的社区，所以如果你想寻求帮助，最快捷的途径就是 QQ 群：284148017 。当然，不会有谁成天没事儿在那里义务解答，所以 QQ 群更多是交流经验的地方。未来，quick 会建立自己的社区，方便大家的交流。</p></li>
-</ul>
-
-
-<br />
-
-
-<h3>熟悉 cocos2d-x API</h3>
-
-<p>本质上，quick 是 cocos2d-x 的一个增强版本，所以熟悉 cocos2d-x API 是基本要求。好在 cocos2d-x 目前已经有相当丰富的学习资料，即便是 C++ 代码的，改写为 Lua 也非常简单，也就语法的区别而已。</p>
-
-<p>这个阶段可以用 quick 里的 CoinFlip 示例为基础，添加更多玩法或功能。CoinFlip 已经具备一个完整游戏的雏形，所以能够在 CoinFlip 中自在添加功能时，也就达到可以独立开发游戏的程度了。</p>
-
-<br />
-
-
-<h3>学习使用扩展功能和第三方 Lua 扩展</h3>
-
-<p>quick 里包含了相当丰富的扩展库，从支付到网络服务都应有尽有。而这些功能也是游戏从项目变成产品时必须的，所以在熟练掌握扩展功能可以大大提高开发效率，避免重复劳动。</p>
-
-<p>在学习扩展功能时，要了解这个扩展功能是基于什么开源项目来开发的，这样才能找到有针对性的学习资源。例如 LuaSocket、LuaFileSystem 等 Lua 扩展、Chipmunk 2D 物理引擎等等，它们的用法在各自项目的网站上都能找到。</p>
-
-<br />
-
-
-<h3>导出自己的 C++ 对象到 Lua</h3>
-
-<p>有时候需要编写一些 C++ 对象，然后导出给 Lua 使用。这里可以参考 lib/cocos2dx_extra/extra/luabinding 里的 *.tolua 文件，将 C/C++ 头文件转为 tolua++ 需要的文件，然后借助 quick 中附带的脚本编译成 luabinding 接口。</p>
-
-<p>在 quick 项目的 wiki 中，也有其他相关的文档可以参考。</p>
-
-<br />
-
-
-<h3>集成第三方 SDK</h3>
-
-<p>quick 有一个附属仓库 <a href="https://github.com/dualface/quick-cocos2d-x-plugins">quick-cocos2d-x-plugins</a>，其中包含了一些 SDK 的接口文件。参考 sample/luajavabridge 示例和这些接口文件，很容易就能完成 SDK 的集成。</p>
-
-<p>后续 quick 也会提供更多的 SDK 接口，以及相应的示例代码。</p>
-
-<p>- END -</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[确保 Xcode 每次 Build 时都自动更新资源]]></title>
-    <link href="http://dualface.github.com/blog/2013/07/31/flush-res-when-build/"/>
-    <updated>2013-07-31T09:35:00+08:00</updated>
-    <id>http://dualface.github.com/blog/2013/07/31/flush-res-when-build</id>
-    <content type="html"><![CDATA[<p>用过 Xcode 的都知道，Xcode 有一个非常讨厌的 bug，有时候更新资源后，真机调试发现资源还是旧的，这个时候只能 Clean 以后重新 Build。但这样非常浪费时间，特别是大一点的工程，编译一次就要几分钟。这个时候，程序员说不定就跑 moko.cc 去瞎逛了。。。</p>
-
-<p>为了提高生产力，我们需要一个脚本，在 Xcode Build 的时候强制更新资源。</p>
-
-<!-- more -->
-
-
-
-
-<br />
-
-
-<h2>确定目录结构</h2>
-
-<p>先看下图，Xcode 项目里蓝色的文件夹表示其中的文件会直接复制到真机上，并且保持目录结构。所以其中的 data，img，snd.ios 目录有什么内容，在真机上也会有什么内容。</p>
-
-<p><img src="http://dualface.github.com/upload/flush_res_when_build/01.png" alt="01.png" /></p>
-
-<br />
-
-
-<p>Xcode 在真机调试时，首先进行 Build，生成 .app 文件（实际是一个目录，不过 Finder 里面看着是一个文件），其中就包含了可执行文件和所有资源。然后 Xcode 会将 .app 传输到真机，最后在真机上启动 .app。所以我们的脚本就是在 Build 的时候，确保生成的 .app 里总是包含最新的资源。</p>
-
-<p>这里就需要知道两个路径：原始资源文件所在的路径，以及 .app 中资源文件所在的路径。</p>
-
-<p>第一个路径需要根据 Xcode 项目文件和资源文件的相对位置来确定。</p>
-
-<p>如下图所示，工程文件在项目的 proj.ios 目录中，而资源文件在项目的 res 目录中。那么第一个路径就是</p>
-
-<pre><code>工程文件所在路径/../res/
-</code></pre>
-
-<p><img src="http://dualface.github.com/upload/flush_res_when_build/02.png" alt="02.png" /></p>
-
-<p>由于 Xcode 提供了不少环境变量，所以“工程文件所在路径”和“.app 中资源文件所在的路径”都很容易确定，我们直接在脚本中引用即可。</p>
-
-<br />
-
-
-<h2>添加脚本</h2>
-
-<p>Xcode 允许在 Build 时指定脚本代码，所以我们要修改 Xcode 的工程，加入脚本内容。</p>
-
-<p>操作步骤：</p>
-
-<ul>
-<li><p>首先在 Xcode 里选中工程，右侧会显示工程的设置界面。</p></li>
-<li><p>从设置界面选择 Build Phases 标签，然后点击右下角的 Add Build Phases 按钮，并选择“Add Run Script”。</p></li>
-<li><p>在新出现的 Run Script 栏中输入以下内容：</p>
-
-<pre><code>_TARGET_BUILD_CONTENTS_PATH=$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH
-echo _TARGET_BUILD_CONTENTS_PATH: $_TARGET_BUILD_CONTENTS_PATH
-echo PWD: $PWD
-
-echo Cleaning $_TARGET_BUILD_CONTENTS_PATH/
-
-rm -fr $_TARGET_BUILD_CONTENTS_PATH/data/*
-rm -fr $_TARGET_BUILD_CONTENTS_PATH/img/*
-rm -fr $_TARGET_BUILD_CONTENTS_PATH/snd.ios/*
-
-mkdir -p $_TARGET_BUILD_CONTENTS_PATH/data/
-mkdir -p $_TARGET_BUILD_CONTENTS_PATH/img/
-mkdir -p $_TARGET_BUILD_CONTENTS_PATH/snd.ios/
-
-cp -RLp $PWD/../res/data/* $_TARGET_BUILD_CONTENTS_PATH/data/
-cp -RLp $PWD/../res/img/* $_TARGET_BUILD_CONTENTS_PATH/img/
-cp -RLp $PWD/../res/snd.ios/* $_TARGET_BUILD_CONTENTS_PATH/snd.ios/
-</code></pre></li>
-<li><p><strong>重要</strong>: 拖动 Run Script 栏，将其移动到列表的第二个位置（也就是 Target Dependencies 后面）。最后如下图：</p></li>
-</ul>
-
-
-<p><img src="http://dualface.github.com/upload/flush_res_when_build/03.png" alt="03.png" /></p>
-
-<br />
-
-
-<h2>注意事项</h2>
-
-<ol>
-<li>脚本内容需要根据项目的目录结构、资源目录结构进行调整。</li>
-<li>偶尔真机调试时，Xcode 会报告资源文件被修改。这时退出 Xcode 重新打开就好了，比重新编译快很多。</li>
-</ol>
-
-
-<p>- EOF -</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[从 Flash 到 cocos2d-x]]></title>
-    <link href="http://dualface.github.com/blog/2013/02/28/from-flash-to-quick/"/>
-    <updated>2013-02-28T00:03:00+08:00</updated>
-    <id>http://dualface.github.com/blog/2013/02/28/from-flash-to-quick</id>
-    <content type="html"><![CDATA[<p>前言：写这篇文章的原因是朋友公司打算将一个页游产品转为手游，邀请我过去做了两天培训。所以我根据 Flash 团队反映的一些问题做了有针对性的阐述。</p>
-
-<p>Flash 团队转入 cocos2d-x 架构，面对的大部分问题实际上都是“实施”细节，语言根本不是障碍。为了让整个内容更有条理性，我以 Flash 团队提出的问题整理了一个提纲。然后我会按照这个提纲逐步完善文章内容（这次保证不会太监 ^_<sup>）。</sup></p>
-
-<p>阅读索引：</p>
-
-<ul>
-<li>cocos2d-x 架构介绍，以及与 Flash 架构的主要差异</li>
-<li>如何创建、编译、发布 cocos2d-x 项目</li>
-<li>Lua 与 ActionScript 的主要差异</li>
-<li>Lua 里如何实现面向对象</li>
-<li>如何创建一个游戏架构，分离数据、逻辑、表现</li>
-<li>cocos2d-x 里出现的各种事件，例如触摸、重力感应等</li>
-<li>cocos2d-x 如何与服务端交互</li>
-<li>资源的整合与优化</li>
-<li>画面渲染和内存优化</li>
-<li>创建自适应多种分辨率的 UI 界面</li>
-</ul>
-
-
-<p>从 Flash 体系转到 cocos2d-x 在技术上没有太多问题，更主要的门槛还是在工具链和具体实践上。</p>
-
-<p>本文尽可能从 Flash 开发者的角度阐述如何转入 quick 体系。</p>
-
-<p>项目地址： <a href="https://github.com/dualface/quick-cocos2d-x">https://github.com/dualface/quick-cocos2d-x</a></p>
-
-<!-- more -->
-
-
-<h2>从 Flash 的角度看 quick-cocos2d-x 体系</h2>
-
-<p>Flash 实际上是一个工具链，包含了从设计、开发、生成、运行的全套工具。主要由几个部分组成：</p>
-
-<ul>
-<li>Flash Professional：制作 Flash 动画的工具</li>
-<li>Flash Builder：一个基于 Eclipse 的 IDE，以及 Flex SDK</li>
-<li>Flash Player：在浏览器中运行 SWF 文件的播放器</li>
-<li>AIR：在桌面和移动设备上运行 SWF 文件的播放器</li>
-</ul>
-
-
-<p>在开发基于 Flash 的游戏时，不管使用什么框架，最底层都是 Flash Player 提供的一系列 API。这些 API 完成了图像绘制、音乐播放、用户交互等功能。</p>
-
-<p>而 quick-cocos2d-x 则由以下部分组成：</p>
-
-<ul>
-<li>quick-cocos2d-x Runtime：游戏引擎</li>
-<li>quick-cocos2d-x Player：播放器，负责在不同平台上初始化运行环境和游戏引擎，然后载入 Lua 脚本执行</li>
-<li>tools：一些辅助工具，例如编译 Lua 脚本、创建自定义的 tolua++ 模块等等</li>
-</ul>
-
-
-<br />
-
-
-<p>quick-cocos2d-x Runtime 结构：</p>
-
-<p><img src="http://dualface.github.com/upload/quick/from_flash_to_quick_architecture.png" alt="from_flash_to_quick_architecture.png" /></p>
-
-<ul>
-<li>最底层是操作系统提供的 OpenGL 库，可以利用硬件加速完成图像绘制（音乐在不同平台会使用不同 API，这里没有单独列出）。</li>
-<li>中间一层，首先是 C++ 编写的 cocos2d-x 引擎。这个引擎提供一个高性能的游戏开发基础架构，让开发者从不同平台的图像渲染、音乐播放、用户交互等细节中解脱出来。接下来用 tolua++ 这个辅助工具，将 cocos2d-x 引擎的 C++ 接口导入 Lua 环境，让 Lua 脚本可以调用 cocos2d-x 的 API。最后，LuaJIT 提供了一个高性能的 Lua 虚拟机，在支持 JIT 的平台上，可以以接近 C 语言的速度运行 Lua 脚本。</li>
-<li>Lua Objc/Java Bridge 则是 quick-cocos2d-x 专为游戏集成各种第三方库提供的便捷工具，可以大大降低游戏接入渠道的成本。</li>
-<li>顶层的 quick framework 是在 cocos2d-x 接口基础上进行的封装，简化了大部分游戏开发时的常用功能。</li>
-</ul>
-
-
-<br />
-
-
-<p>虽然 quick 已经提供了 iOS/Android/Windows/Mac 平台的 Player，但如果需要添加自己的第三方库，或者对 quick 做一些扩展，那么就需要安装各个平台自己的开发工具，才能够完成自定义 Player 的创建工作：</p>
-
-<p><img src="http://dualface.github.com/upload/quick/from_flash_to_quick_build_toolchain.png" alt="from_flash_to_quick_build_toolchain.png" /></p>
-
-<br />
-
-
-<h2>准备构建环境</h2>
-
-<blockquote><p>只有准备自己构建 Player 时才需要准备构建环境。quick-cocos2d-x 提供了功能完善的 Windows 和 Mac 平台下的 Player，可以满足绝大多数情况下的开发需要。具体内容请参考本文下一小节。</p></blockquote>
-
-<p>第一步自然是获取 quick-cocos2d-x 的源代码。</p>
-
-<ol>
-<li><p>安装 git 工具，然后下载 quick-cocos2d-x 仓库：</p>
-
-<pre><code>git clone git://github.com/dualface/quick-cocos2d-x.git
-</code></pre></li>
-<li><p>完成后，在 quick-cocos2d-x 目录执行命令（由于要下载几百兆的 cocos2d-x，所以耗时较长）：</p>
-
-<pre><code>git submodule init
-git submodule update
-</code></pre></li>
-</ol>
-
-
-<blockquote><p>注意：不能使用官方版 cocos2d-x，因为 quick-cocos2d-x 为了加强 Lua 执行，对 cocos2d-x 做了许多改进。</p></blockquote>
-
-<br />
-
-
-<h3>配置 Mac 下的开发环境</h3>
-
-<p>准备工作：</p>
-
-<ol>
-<li>从 Apple 网站下载安装最新版 Xcode（已经包含 Mac SDK 和 iOS SDK）</li>
-<li><p>启动 Xcode，选择菜单“Xcode -> Preferences”，打开  Preferences 对话框。切换到 Locations 选项卡，选中“Source Trees”选项卡。并添加一个名为 <strong>QUICK_COCOS2DX_ROOT</strong> 的变量，其值为 quick-cocos2d-x 所在目录：</p>
-
-<p><img src="http://dualface.github.com/upload/quick/from_flash_to_quick_set_xcode.png" alt="from_flash_to_quick_set_xcode.png" /></p></li>
-<li><p>进入命令行，输入：</p>
-
-<pre><code>open -a TextEdit ~/.profile
-</code></pre>
-
-<p>添加内容（将其中的 [PATH TO] 替换为实际目录）：</p>
-
-<pre><code>export QUICK_COCOS2DX_ROOT=/[PATH TO]/quick-cocos2d-x
-export COCOS2DX_ROOT=$QUICK_COCOS2DX_ROOT/lib/cocos2d-x
-</code></pre></li>
-</ol>
-
-
-<blockquote><p>注意：必须使用绝对路径。</p></blockquote>
-
-<p>设置完成后，打开 <strong>quick-cocos2d-x/samples/CoinFlip/proj.ios/CoinFlip.ios.xcodeproj</strong> 项目，如果编译成功，那么构建 Mac 和 iOS 平台应用的环境就搭建好了。</p>
-
-<br />
-
-
-<ol>
-<li>从 Google 网站 <a href="http://developer.android.com/sdk/index.html">http://developer.android.com/sdk/index.html</a> 下载最新的 Android SDK（强烈建议下载 ADT Bundle 版本）。</li>
-<li><p>解压缩以后，运行 tools/android 程序，打开 Android SDK 管理器：</p>
-
-<p><img src="http://dualface.github.com/upload/quick/from_flash_to_quick_set_android_mac.png" alt="from_flash_to_quick_set_android_mac.png" /></p></li>
-<li><p>由于 quick-cocos2d-x 最低支持 Android 2.2 版，所以选中 Android 2.2 SDK，然后下载安装即可。</p></li>
-<li><p>下载 Android NDK r8b 版本并解压缩（由于 NDK 的特殊性，所以对版本有特定要求），Mac 版下载地址：<a href="http://221.176.14.87/dl.google.com/android/ndk/android-ndk-r8b-darwin-x86.tar.bz2">http://221.176.14.87/dl.google.com/android/ndk/android-ndk-r8b-darwin-x86.tar.bz2</a>，Windows 版下载地址：<a href="http://221.176.14.96/dl.google.com/android/ndk/android-ndk-r8b-windows.zip">http://221.176.14.96/dl.google.com/android/ndk/android-ndk-r8b-windows.zip</a>。</p></li>
-<li><p>再次修改 ~/.profile 文件，加入以下内容：</p>
-
-<pre><code>export ANDROID_SDK_ROOT=/[PATH TO]/android-sdk-macosx
-export ANDROID_NDK_ROOT=/[PATH TO]/android-ndk-r8b
-</code></pre></li>
-<li><p>在命令行模式下进入 <strong>quick-cocos2d-x/samples/CoinFlip/proj.android/</strong> 目录，执行命令 <strong>build_native.sh</strong>，如果最后输出以下内容就表示创建成功：</p>
-
-<pre><code>SharedLibrary  : libgame.so
-Install        : libgame.so =&gt; libs/armeabi/libgame.so
-</code></pre></li>
-</ol>
-
-
-<br />
-
-
-<h3>配置 Windows 下的开发配置</h3>
-
-<p>quick-cocos2d-x 要求安装 Visual Studio 2012（Express 版或者更高级版本都可以），以及最新的显卡驱动（否则可能出现 Player 无法运行的问题）。</p>
-
-<ol>
-<li><p>打开系统对话框，添加一个环境变量 <strong>QUICK_COCOS2DX_ROOT</strong>，指向 quick-cocos2d-x 所在目录：</p>
-
-<p><img src="http://dualface.github.com/upload/quick/from_flash_to_quick_set_windows.png" alt="from_flash_to_quick_set_windows.png" /></p></li>
-<li><p>打开 quick-cocos2d-x\simulator\proj.win32\LuaHostWin32\LuaHostWin32.sln 工程，进行编译。</p></li>
-</ol>
-
-
-<br />
-
-
-<h2>用 quick-cocos2d-x 的 Player 打造最简开发环境</h2>
-
-<p>只需要从 <a href="https://github.com/dualface/quick-cocos2d-x">https://github.com/dualface/quick-cocos2d-x</a> 网站直接下载最新版本的 Windows 或 Mac 平台下的 Player 执行文件，我们就可以开始进行游戏开发了。</p>
-
-<p>以 Windows 环境为例：</p>
-
-<ol>
-<li><p>下载 <a href="https://github.com/dualface/quick-cocos2d-x/archive/master.zip">https://github.com/dualface/quick-cocos2d-x/archive/master.zip</a>，解压缩后运行 simulator/bin/win32/LuaHostWin32.exe：</p>
-
-<p><img src="http://dualface.github.com/upload/quick/from_flash_to_quick_run_luahostwin32.png" alt="from_flash_to_quick_run_luahostwin32.png" /></p></li>
-<li><p>选择 Player 的菜单“File -> Open Project”，并选择 samples\CoinFlip 为 Project Directory；设置 Screen Size 为 640x960，Screen Direction 为 Landscape：</p>
-
-<p><img src="http://dualface.github.com/upload/quick/from_flash_to_quick_run_luahostwin32_project.png" alt="from_flash_to_quick_run_luahostwin32_project.png" /></p></li>
-<li><p>一切正常的话，点击 Open Project 按钮后就可以看到 CoinFlip 示例程序的画面了：</p>
-
-<p><img src="http://dualface.github.com/upload/quick/from_flash_to_quick_run_luahostwin32_ok.png" alt="from_flash_to_quick_run_luahostwin32_ok.png" /></p></li>
-</ol>
-
-
-<br />
-
-
-<p>quick-cocos2d-x 的 Player 提供了创建运行项目、动态切换分辨率、实时调试窗口、一键重启等功能，在开发实践中可以显著提高开发效率。</p>
-
-<p>使用 quick-cocos2d-x 的典型开发流程：</p>
-
-<ol>
-<li><p>对于一个团队中的大多数开发人员来说，只需要使用 Player 就能完成大部分开发工作。不需要他们安装诸如 Xcode、Visual Studio 等任何开发工具。</p></li>
-<li><p>如果游戏包含 C/C++ 的扩展代码，由具备完整开发环境的开发人员构建一个自定义 Player ，并分发给整个团队即可。</p></li>
-<li><p>需要真机测试或发布时，由具备相应开发环境的开发人员编译并输出 .ipa 或 .apk 文件。配合 TestFlight 等第三方 SDK，可以轻松实现错误日志、崩溃记录等功能，为调试提供详细数据。</p></li>
-</ol>
-
-
-<br />
-
-
-<ul>
-<li>未完待续 -</li>
-</ul>
-
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[CCLuaObjcBridge - Lua 与 Objective-C 互操作的简单解决方案]]></title>
-    <link href="http://dualface.github.com/blog/2013/01/27/call-objectivec-from-lua/"/>
-    <updated>2013-01-27T13:08:00+08:00</updated>
-    <id>http://dualface.github.com/blog/2013/01/27/call-objectivec-from-lua</id>
-    <content type="html"><![CDATA[<p>月初的时候，发了一篇关于 <a href="http://dualface.github.com/blog/2013/01/01/call-java-from-lua/">Lua 与 Java 互操作的文章</a>，里面提到了我创建的 LuaJavaBridge 工具。现在，最新的 Lua 与 Objective-C 互操作工具也出来了。因为是专门针对 cocos2d-x 的，所以命名为 CCLuaObjcBridge。</p>
-
-<p>PS: 以前的 LuaJavaBridge 也会改名为 CCLuaJavaBridge，并且参考现在 CCLuaObjcBridge 的实现，做了不少改进，完成后也会发布。</p>
-
-<p>CCLuaObjcBridge（后文简称 luaoc）的功能就是从 Lua 里直接掉用“任意 Objective-C 类方法”。利用这个特性，封装各种 iOS 上的库简直碉堡了，堪称 cocos2d-x Lua 游戏开发的神器 ^_^</p>
-
-<!--more-->
-
-
-<h2>luaoc 的主要特征</h2>
-
-<ul>
-<li>可以从 Lua 调用 Objective-C Class Method</li>
-<li>调用 Objective-C 方法时，支持 int/float/boolean/String/Lua function/Lua table 六种参数类型</li>
-<li>可以将 Lua function 作为参数传递给 Objective-C，并让 Objective-C 保存 Lua function 的引用</li>
-<li>可以从 Objective-C 调用 Lua 的全局函数，或者调用引用指向的 Lua function</li>
-</ul>
-
-
-<p>主要功能和 luaj 是一样的，但相比老版本 luaj 做了一些针对 Objective-C 的调整。</p>
-
-<h2>luaoc 用法示例</h2>
-
-<p>下面的代码演示了如何调用 91 SDK：</p>
-
-<p><strong>Lua 代码:</strong></p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-</pre></td><td class='code'><pre><code class='lua'><span class='line'><span class="c1">-- 注册回调函数，在玩家离开 91 平台界面时显示一个消息</span>
-</span><span class='line'><span class="c1">-- PS: 91 SDK 的支付接口不会直接返回状态给客户端，支付需要在服务端验证</span>
-</span><span class='line'><span class="kd">local</span> <span class="k">function</span> <span class="nf">callback</span><span class="p">(</span><span class="n">event</span><span class="p">)</span>
-</span><span class='line'>    <span class="k">if</span> <span class="n">event</span> <span class="o">==</span> <span class="s2">&quot;</span><span class="s">SDKNDCOM_LEAVE_PLATFORM&quot;</span> <span class="k">then</span>
-</span><span class='line'>        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="s">充值正在进行中，稍候您就能收到金币啦&quot;</span><span class="p">)</span>
-</span><span class='line'>    <span class="k">end</span>
-</span><span class='line'><span class="k">end</span>
-</span><span class='line'>
-</span><span class='line'><span class="n">luaoc</span><span class="p">.</span><span class="n">callStaticMethod</span><span class="p">(</span><span class="s2">&quot;</span><span class="s">SDKNdCom&quot;</span><span class="p">,</span> <span class="s2">&quot;</span><span class="s">registerScriptHandler&quot;</span><span class="p">,</span> <span class="p">{</span><span class="n">listener</span> <span class="o">=</span> <span class="n">callback</span><span class="p">})</span>
-</span><span class='line'>
-</span><span class='line'><span class="c1">-- 进入 91 的支付接口</span>
-</span><span class='line'><span class="kd">local</span> <span class="n">args</span> <span class="o">=</span> <span class="p">{</span>
-</span><span class='line'>    <span class="n">orderId</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="s">order-00001001001&quot;</span><span class="p">,</span>
-</span><span class='line'>    <span class="n">coins</span> <span class="o">=</span> <span class="mi">1000</span><span class="p">,</span>
-</span><span class='line'><span class="p">}</span>
-</span><span class='line'><span class="kd">local</span> <span class="n">ok</span><span class="p">,</span> <span class="n">ret</span> <span class="o">=</span> <span class="n">luaoc</span><span class="p">.</span><span class="n">callStaticMethod</span><span class="p">(</span><span class="s2">&quot;</span><span class="s">SDKNdCom&quot;</span><span class="p">,</span> <span class="s2">&quot;</span><span class="s">payForCoins&quot;</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span>
-</span><span class='line'><span class="k">if</span> <span class="ow">not</span> <span class="n">ok</span> <span class="k">then</span>
-</span><span class='line'>    <span class="nb">print</span><span class="p">(</span><span class="nb">string.format</span><span class="p">(</span><span class="s2">&quot;</span><span class="s">SDKNdCom.payForCoins() - call API failure, error code: %s&quot;</span><span class="p">,</span> <span class="nb">tostring</span><span class="p">(</span><span class="n">ret</span><span class="p">)))</span>
-</span><span class='line'><span class="k">end</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-
-
-<br />
-
-
-<p>下面代码是 Objective-C 写的中间层，用来沟通 91 SDK 和 Lua 代码。</p>
-
-<p><strong>Objective-C 代码:</strong></p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-<span class='line-number'>29</span>
-<span class='line-number'>30</span>
-</pre></td><td class='code'><pre><code class='objectivec'><span class='line'><span class="k">+</span> <span class="p">(</span><span class="n">NSDictionary</span> <span class="o">*</span><span class="p">)</span> <span class="nf">payForCoins:</span><span class="p">(</span><span class="n">NSDictionary</span> <span class="o">*</span><span class="p">)</span><span class="nv">dict</span>
-</span><span class='line'><span class="p">{</span>
-</span><span class='line'>    <span class="n">NSString</span> <span class="o">*</span><span class="n">orderId</span> <span class="o">=</span> <span class="p">[</span><span class="n">dict</span> <span class="nl">objectForKey:</span><span class="s">@&quot;orderId&quot;</span><span class="p">];</span>
-</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">orderId</span> <span class="o">||</span> <span class="p">[</span><span class="n">orderId</span> <span class="n">length</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span>
-</span><span class='line'>    <span class="p">{</span>
-</span><span class='line'>        <span class="n">CFUUIDRef</span> <span class="n">theUUID</span> <span class="o">=</span> <span class="n">CFUUIDCreate</span><span class="p">(</span><span class="nb">NULL</span><span class="p">);</span>
-</span><span class='line'>        <span class="n">CFStringRef</span> <span class="n">string</span> <span class="o">=</span> <span class="n">CFUUIDCreateString</span><span class="p">(</span><span class="nb">NULL</span><span class="p">,</span> <span class="n">theUUID</span><span class="p">);</span>
-</span><span class='line'>        <span class="n">CFRelease</span><span class="p">(</span><span class="n">theUUID</span><span class="p">);</span>
-</span><span class='line'>        <span class="n">orderId</span> <span class="o">=</span> <span class="p">[(</span><span class="n">NSString</span> <span class="o">*</span><span class="p">)</span><span class="n">string</span> <span class="n">autorelease</span><span class="p">];</span>
-</span><span class='line'>    <span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'>    <span class="kt">int</span> <span class="n">coins</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
-</span><span class='line'>    <span class="k">if</span> <span class="p">([</span><span class="n">dict</span> <span class="nl">objectForKey:</span><span class="s">@&quot;coins&quot;</span><span class="p">])</span>
-</span><span class='line'>    <span class="p">{</span>
-</span><span class='line'>        <span class="n">coins</span> <span class="o">=</span> <span class="p">[[</span><span class="n">dict</span> <span class="nl">objectForKey:</span><span class="s">@&quot;coins&quot;</span><span class="p">]</span> <span class="n">intValue</span><span class="p">];</span>
-</span><span class='line'>    <span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'>    <span class="n">NSString</span> <span class="o">*</span><span class="n">description</span> <span class="o">=</span> <span class="p">[</span><span class="n">dict</span> <span class="nl">objectForKey:</span><span class="s">@&quot;description&quot;</span><span class="p">];</span>
-</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">description</span><span class="p">)</span>
-</span><span class='line'>    <span class="p">{</span>
-</span><span class='line'>        <span class="n">description</span> <span class="o">=</span> <span class="s">@&quot;&quot;</span><span class="p">;</span>
-</span><span class='line'>    <span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'>    <span class="kt">int</span> <span class="n">ret</span> <span class="o">=</span> <span class="p">[[</span><span class="n">NdComPlatform</span> <span class="n">defaultPlatform</span><span class="p">]</span> <span class="nl">NdUniPayForCoin:</span><span class="n">orderId</span>
-</span><span class='line'>                                                  <span class="nl">needPayCoins:</span><span class="n">coins</span>
-</span><span class='line'>                                                <span class="nl">payDescription:</span><span class="n">description</span><span class="p">];</span>
-</span><span class='line'>
-</span><span class='line'>    <span class="k">return</span> <span class="p">[</span><span class="n">NSDictionary</span> <span class="nl">dictionaryWithObjectsAndKeys:</span><span class="n">orderId</span><span class="p">,</span> <span class="s">@&quot;orderId&quot;</span><span class="p">,</span>
-</span><span class='line'>            <span class="p">[</span><span class="n">NSNumber</span> <span class="nl">numberWithInt:</span><span class="n">ret</span><span class="p">],</span> <span class="s">@&quot;error&quot;</span><span class="p">,</span> <span class="nb">nil</span><span class="p">];</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>由于无法直接获取 Objective-C 方法的参数个数和类型，所以如果要从 Objective-C 方法里接收 Lua 传递的参数，那么只能以 NSDictionary 的形式。</p>
-
-<p>上述代码中，Lua 端传递了一个包含 orderId 和 coins 的表格作为参数。这个表格会被 luaoc 自动转换为 NSDictionary 对象，并传入 payForCoins:(NSDictionary*) 方法。</p>
-
-<p>不过从 Objective-C 返回值给 Lua 时，就可以返回各种类型的值。目前支持的值类型有 int/float/BOOL/NSString/NSDictionary。特别是可以返回 NSDictionary 类型后，Lua 代码从 Objective-C 端获取数据就简单很多了。</p>
-
-<h2>从 Objective-C 调用 Lua</h2>
-
-<p>由于 CCLuaObjcBridge 已经集成到<a href="https://github.com/dualface/quick-cocos2d-x">quick-cocos2d-x</a>（一个基于 cocos2d-x 的 Lua 游戏引擎）中，所以从 Objective-C 调用 Lua 也更简单灵活：</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-</pre></td><td class='code'><pre><code class='objectivec'><span class='line'><span class="c1">// functionId 是 Lua function 的引用 ID，参考 LuaJavaBridge 文章中的描述</span>
-</span><span class='line'>
-</span><span class='line'><span class="c1">// 1. 将引用 ID 对应的 Lua function 放入 Lua stack</span>
-</span><span class='line'><span class="n">CCLuaObjcBridge</span><span class="o">::</span><span class="n">pushLuaFunctionById</span><span class="p">(</span><span class="n">functionId</span><span class="p">);</span>
-</span><span class='line'>
-</span><span class='line'><span class="c1">// 2. 将需要传递给 Lua function 的参数放入 Lua stack</span>
-</span><span class='line'><span class="n">CCLuaValueDict</span> <span class="n">item</span><span class="p">;</span>
-</span><span class='line'><span class="n">item</span><span class="p">[</span><span class="s">&quot;title&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">CCLuaValue</span><span class="o">::</span><span class="n">stringValue</span><span class="p">(</span><span class="s">&quot;hello&quot;</span><span class="p">);</span>
-</span><span class='line'><span class="n">item</span><span class="p">[</span><span class="s">&quot;coins&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">CCLuaValue</span><span class="o">::</span><span class="n">intValue</span><span class="p">(</span><span class="mi">1000</span><span class="p">);</span>
-</span><span class='line'><span class="n">item</span><span class="p">[</span><span class="s">&quot;success&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">CCLuaValue</span><span class="o">::</span><span class="n">booleanValue</span><span class="p">(</span><span class="nb">TRUE</span><span class="p">);</span>
-</span><span class='line'><span class="n">CCLuaObjcBridge</span><span class="o">::</span><span class="n">getStack</span><span class="p">()</span><span class="o">-&gt;</span><span class="n">pushCCLuaValueDict</span><span class="p">(</span><span class="n">item</span><span class="p">);</span>
-</span><span class='line'>
-</span><span class='line'><span class="c1">// 3. 执行 Lua function</span>
-</span><span class='line'><span class="n">CCLuaObjcBridge</span><span class="o">::</span><span class="n">getStack</span><span class="p">()</span><span class="o">-&gt;</span><span class="n">executeFunction</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span>
-</span><span class='line'>
-</span><span class='line'><span class="c1">// 4. 释放引用 ID</span>
-</span><span class='line'><span class="n">CCLuaObjcBridge</span><span class="o">::</span><span class="n">releaseLuaFunctionById</span><span class="p">(</span><span class="n">callbackId</span><span class="p">);</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<blockquote><p>CCLuaObjcBridge::getStack() 会返回一个 CCLuaStack 对象的指针。</p></blockquote>
-
-<p>CCLuaStack 是 quick-cocos2d-x 引入的新对象，封装了 Lua stack 的一些常用操作。例如要将值放入 Lua stack 就提供了下列方法，支持各种数据类型：</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-</pre></td><td class='code'><pre><code class='c++'><span class='line'><span class="kt">void</span> <span class="n">pushInt</span><span class="p">(</span><span class="kt">int</span> <span class="n">intValue</span><span class="p">);</span>
-</span><span class='line'><span class="kt">void</span> <span class="n">pushFloat</span><span class="p">(</span><span class="kt">float</span> <span class="n">floatValue</span><span class="p">);</span>
-</span><span class='line'><span class="kt">void</span> <span class="n">pushBoolean</span><span class="p">(</span><span class="kt">bool</span> <span class="n">boolValue</span><span class="p">);</span>
-</span><span class='line'><span class="kt">void</span> <span class="n">pushString</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span><span class="o">*</span> <span class="n">stringValue</span><span class="p">);</span>
-</span><span class='line'><span class="kt">void</span> <span class="n">pushString</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span><span class="o">*</span> <span class="n">stringValue</span><span class="p">,</span> <span class="kt">int</span> <span class="n">length</span><span class="p">);</span>
-</span><span class='line'><span class="kt">void</span> <span class="n">pushNil</span><span class="p">(</span><span class="kt">void</span><span class="p">);</span>
-</span><span class='line'><span class="kt">void</span> <span class="n">pushCCObject</span><span class="p">(</span><span class="n">CCObject</span><span class="o">*</span> <span class="n">objectValue</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span><span class="o">*</span> <span class="n">typeName</span><span class="p">);</span>
-</span><span class='line'><span class="kt">void</span> <span class="n">pushCCLuaValue</span><span class="p">(</span><span class="k">const</span> <span class="n">CCLuaValue</span><span class="o">&amp;</span> <span class="n">value</span><span class="p">);</span>
-</span><span class='line'><span class="kt">void</span> <span class="n">pushCCLuaValueDict</span><span class="p">(</span><span class="k">const</span> <span class="n">CCLuaValueDict</span><span class="o">&amp;</span> <span class="n">dict</span><span class="p">);</span>
-</span><span class='line'><span class="kt">void</span> <span class="n">pushCCLuaValueArray</span><span class="p">(</span><span class="k">const</span> <span class="n">CCLuaValueArray</span><span class="o">&amp;</span> <span class="n">array</span><span class="p">);</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>相比 LuaJavaBridge，CCLuaObjcBridge 更容易使用、传递数据也更方便。以后 LuaJavaBridge 也会更名为 CCLuaJavaBridge，并使用相同的值传递机制。</p>
-
-<br />
-
-
-<h2>参考</h2>
-
-<p>CCLuaObjcBridge 和 LuaJavaBridge 是一脉相承，更详细的描述请参考《<a href="http://dualface.github.com/blog/2013/01/01/call-java-from-lua/">LuaJavaBridge - Lua 与 Java 互操作的简单解决方案</a>》。</p>
-
-<p>- 完 -</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[在 Mac OS X 上安装 Lua 32bit 环境]]></title>
-    <link href="http://dualface.github.com/blog/2013/01/27/install-32bit-lua-on-macosx/"/>
-    <updated>2013-01-27T11:42:00+08:00</updated>
-    <id>http://dualface.github.com/blog/2013/01/27/install-32bit-lua-on-macosx</id>
-    <content type="html"><![CDATA[<p>因为我们公司使用 <a href="https://github.com/dualface/quick-cocos2d-x">quick-cocos2d-x</a>（一个基于 cocos2d-x 的 Lua 游戏引擎）开发，所以在开发环境里必须配置 Lua，并且需要和移动设备上的 32bit Lua 匹配。</p>
-
-<p>默认情况下，OS X 上编译 Lua 会编译成 64bit，所以需要做点手脚。此外还需要修改 LuaRocks，不然用 Lua 是编译成 32bit 了，可用 LuaRocks 安装的扩展还是 64bit。</p>
-
-<!--more-->
-
-
-<h2>编译 32bit Lua</h2>
-
-<p>下载源代码（我用的 Lua 5.1.5）后，修改文件 src/Makefile，找到：</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class='makefile'><span class='line'><span class="nf">macosx</span><span class="o">:</span>
-</span><span class='line'>    <span class="k">$(</span>MAKE<span class="k">)</span> all <span class="nv">MYCFLAGS</span><span class="o">=</span>-DLUA_USE_LINUX <span class="nv">MYLIBS</span><span class="o">=</span><span class="s2">&quot;-lreadline&quot;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>改为：</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class='makefile'><span class='line'><span class="nf">macosx</span><span class="o">:</span>
-</span><span class='line'>    <span class="k">$(</span>MAKE<span class="k">)</span> all <span class="nv">MYCFLAGS</span><span class="o">=</span><span class="s2">&quot;-arch i386 -DLUA_USE_LINUX&quot;</span> <span class="nv">MYLIBS</span><span class="o">=</span><span class="s2">&quot;-arch i386 -lreadline&quot;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>make 后，file src/lua 可以看到已经是 32bit 执行文件了。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span>make
-</span><span class='line'><span class="nv">$ </span>file src/lua
-</span><span class='line'>src/lua: Mach-O executable i386
-</span></code></pre></td></tr></table></div></figure>
-
-
-
-
-<br />
-
-
-<h2>让 LuaRocks 安装 32bit 扩展</h2>
-
-<p>首先安装 LuaRocks，然后修改文件 /usr/local/share/lua/5.1/luarocks/cfg.lua，找到：</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class='lua'><span class='line'><span class="k">if</span> <span class="n">detected</span><span class="p">.</span><span class="n">macosx</span> <span class="k">then</span>
-</span><span class='line'>   <span class="o">...</span>
-</span><span class='line'>   <span class="n">defaults</span><span class="p">.</span><span class="n">variables</span><span class="p">.</span><span class="n">LIBFLAG</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="s">-arch i386 -bundle -undefined dynamic_lookup -all_load&quot;</span>
-</span><span class='line'>   <span class="o">...</span>
-</span><span class='line'><span class="k">end</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>改为：</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-</pre></td><td class='code'><pre><code class='lua'><span class='line'><span class="k">if</span> <span class="n">detected</span><span class="p">.</span><span class="n">macosx</span> <span class="k">then</span>
-</span><span class='line'>   <span class="o">...</span>
-</span><span class='line'>   <span class="n">defaults</span><span class="p">.</span><span class="n">variables</span><span class="p">.</span><span class="n">CFLAGS</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="s">-arch i386&quot;</span>
-</span><span class='line'>   <span class="n">defaults</span><span class="p">.</span><span class="n">variables</span><span class="p">.</span><span class="n">LIBFLAG</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="s">-arch i386 -bundle -undefined dynamic_lookup -all_load&quot;</span>
-</span><span class='line'>   <span class="o">...</span>
-</span><span class='line'><span class="k">end</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>增加 CFLAGS 标志，并在 LIBFLAG 中添加 &#8220;-arch i386&#8221;。修改完成后，用 LuaRocks 重新安装需要的扩展。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span>sudo luarocks install luafilesystem
-</span><span class='line'>...
-</span><span class='line'>luafilesystem 1.6.2-1 is now built and installed in /usr/local/
-</span><span class='line'>
-</span><span class='line'><span class="nv">$ </span>file /usr/local/lib/lua/5.1/lfs.so
-</span><span class='line'>/usr/local/lib/lua/5.1/lfs.so: Mach-O bundle i386
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>- 完 -</p>
-
-<p>PS: 找了半天没找到含而不露的福利图 -3-</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[LuaJavaBridge - Lua 与 Java 互操作的简单解决方案]]></title>
-    <link href="http://dualface.github.com/blog/2013/01/01/call-java-from-lua/"/>
-    <updated>2013-01-01T01:01:00+08:00</updated>
-    <id>http://dualface.github.com/blog/2013/01/01/call-java-from-lua</id>
-    <content type="html"><![CDATA[<p>最近在游戏里要集成中国移动的 SDK，而这些 SDK 都是用 Java 编写的。由于我们整个游戏都是使用 Lua 开发的，所以就面对 Lua 与 Java 互操作的问题。</p>
-
-<p>传统做法是先用 C/C++ 借助 JNI（Java Native Interface）编写调用 Java 的接口函数，然后再将这些函数通过 tolua++ 导出给 Lua 使用。这种做法最大的问题就是太繁琐，而且稍微有一点点修改，就要重新编译，严重降低了开发效率。</p>
-
-<p>我尝试写了几个接口函数后，发现 JNI 提供了完善的接口来操作 Java，比如查找特定的 Class、Method 等等。既然有这些东西，我想完全可以实现一个很薄的转接层。这个层会提供一些函数，让 Lua 代码可以直接调用到 Java 的方法。</p>
-
-<p>经过一番努力，LuaJavaBridge（简称 luaj）诞生了。</p>
-
-<!-- more -->
-
-
-<h2>luaj 主要特征</h2>
-
-<ul>
-<li>  可以从 Lua 调用 Java Class Static Method</li>
-<li>  调用 Java 方法时，支持 int/float/boolean/String/Lua function 五种参数类型</li>
-<li>  可以将 Lua function 作为参数传递给 Java，并让 Java 保存 Lua function 的引用</li>
-<li>  可以从 Java 调用 Lua 的全局函数，或者调用引用指向的 Lua function</li>
-</ul>
-
-
-<p>luaj 的功能很简单，但对于集成各种 SDK 来说已经完全满足需求了。</p>
-
-<h2>luaj 用法示例</h2>
-
-<p>下面的代码是我们游戏中实际使用的中国移动支付 SDK 调用代码，luaj 好不好用一目了然：</p>
-
-<p><strong>Lua 代码:</strong></p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-<span class='line-number'>29</span>
-</pre></td><td class='code'><pre><code class='lua'><span class='line'><span class="cm">--[[</span>
-</span><span class='line'><span class="cm">购买 1000 金币</span>
-</span><span class='line'>
-</span><span class='line'><span class="cm">Java 方法原型:</span>
-</span><span class='line'><span class="cm">public static void GameInterface_doBilling(final String billingIndex,</span>
-</span><span class='line'><span class="cm">        final boolean useSms,</span>
-</span><span class='line'><span class="cm">        final boolean isRepeated,</span>
-</span><span class='line'><span class="cm">        final int luaFunctionId)</span>
-</span><span class='line'><span class="cm">]]</span>
-</span><span class='line'>
-</span><span class='line'><span class="c1">-- 用于处理支付结果的函数</span>
-</span><span class='line'><span class="kd">local</span> <span class="k">function</span> <span class="nf">callback</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
-</span><span class='line'>    <span class="k">if</span> <span class="n">result</span> <span class="o">==</span> <span class="s2">&quot;</span><span class="s">success&quot;</span> <span class="k">then</span>
-</span><span class='line'>        <span class="n">game</span><span class="p">.</span><span class="n">state</span><span class="p">:</span><span class="n">increaseCoins</span><span class="p">(</span><span class="mi">1000</span><span class="p">)</span>
-</span><span class='line'>        <span class="n">game</span><span class="p">.</span><span class="n">state</span><span class="p">:</span><span class="n">save</span><span class="p">()</span>
-</span><span class='line'>    <span class="k">end</span>
-</span><span class='line'><span class="k">end</span>
-</span><span class='line'>
-</span><span class='line'><span class="c1">-- 调用 Java 方法需要的参数</span>
-</span><span class='line'><span class="kd">local</span> <span class="n">args</span> <span class="o">=</span> <span class="p">{</span>
-</span><span class='line'>    <span class="s2">&quot;</span><span class="s">001&quot;</span><span class="p">,</span>    <span class="c1">-- billingIndex</span>
-</span><span class='line'>    <span class="kc">true</span><span class="p">,</span>     <span class="c1">-- useSms</span>
-</span><span class='line'>    <span class="kc">true</span><span class="p">,</span>     <span class="c1">-- isRepeated</span>
-</span><span class='line'>    <span class="n">callback</span>  <span class="c1">-- luaFunctionId</span>
-</span><span class='line'><span class="p">}</span>
-</span><span class='line'><span class="c1">-- Java 类的名称</span>
-</span><span class='line'><span class="kd">local</span> <span class="n">className</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="s">com/qeeplay/frameworks/ChinaMobile_SDK&quot;</span>
-</span><span class='line'><span class="c1">-- 调用 Java 方法</span>
-</span><span class='line'><span class="n">luaj</span><span class="p">.</span><span class="n">callStaticMethod</span><span class="p">(</span><span class="n">className</span><span class="p">,</span> <span class="s2">&quot;</span><span class="s">GameInterface_doBilling&quot;</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>上面的代码就不解释了，注释已经写得非常明白。</p>
-
-<h2>luaj 实现原理</h2>
-
-<p>luaj 的核心目标有两个：从 Lua 调用 Java, 从 Java 调用 Lua。整理出来就是如下几点：</p>
-
-<ul>
-<li>查找并调用指定的 Java 方法</li>
-<li>检查调用结果，并从 Java 方法获取返回值</li>
-<li>将 Lua function 作为参数传递给 Java 方法</li>
-<li>在 Java 方法中调用 Lua function</li>
-</ul>
-
-
-<h3>查找并调用指定的 Java 方法</h3>
-
-<p>JNI 提供了 FindClass() 方法用于查找指定的 Class，所以 luaj.callStaticMethod() 的第一个参数就是要调用的 Java Class 的完整类名称（类名称中的“.”要替换为“/”）。</p>
-
-<p>找到指定 Class 后，利用 JNI 的 GetStaticMethodID() 方法就可以找到这个类的指定静态方法，前提是要提供静态方法的名称和签名。</p>
-
-<p>所谓签名，就是指 Java 方法的参数类型和返回类型定义。例如前面示例代码中 GameInterface_doBilling() 方法的签名是 (Ljava/lang/String;ZZI)V 。关于 Java 方法签名的具体定义，可以参考：<a href="http://docs.oracle.com/javase/7/docs/technotes/guides/jni/spec/types.html#wp16432">JNI Type Signatures</a>。</p>
-
-<p>由于签名写起来有点啰嗦，所以 luaj 可以根据调用参数自动猜测方法签名。示例代码中，luaj.callStaticMethod() 的第二个参数指定了要查找的方法名称，但并没有提供方法的签名，这就是利用了 luaj 的自动猜测签名功能。</p>
-
-<p>示例代码一共指定了 4 个参数，分别是：字符串、布尔值、布尔值、Lua function。</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-</pre></td><td class='code'><pre><code class='lua'><span class='line'><span class="c1">-- 调用 Java 方法需要的参数</span>
-</span><span class='line'><span class="kd">local</span> <span class="n">args</span> <span class="o">=</span> <span class="p">{</span>
-</span><span class='line'>    <span class="s2">&quot;</span><span class="s">001&quot;</span><span class="p">,</span>          <span class="c1">-- billingIndex</span>
-</span><span class='line'>    <span class="kc">true</span><span class="p">,</span>           <span class="c1">-- useSms</span>
-</span><span class='line'>    <span class="kc">true</span><span class="p">,</span>           <span class="c1">-- isRepeated</span>
-</span><span class='line'>    <span class="n">callback</span>        <span class="c1">-- luaFunctionId</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>luaj 根据这 4 个参数，会构造出正确的 GameInterface_doBilling() 方法签名。<em>注意 Lua function 是以整数的形式传入 Java 方法，所以 Java 方法的第四个参数是 int 类型）。</em></p>
-
-<p>不幸的是 Lua 里没有办法准确判断一个数值是整数还是浮点数，所以 luaj 在猜测方法签名时，假定所有的数值都是浮点数。因此下面的代码第二个调用就会失败：</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-</pre></td><td class='code'><pre><code class='lua'><span class='line'><span class="kd">local</span> <span class="n">args</span> <span class="o">=</span> <span class="p">{</span><span class="mi">1</span><span class="p">}</span> <span class="c1">-- 生成的方法签名是 (F)V</span>
-</span><span class='line'>
-</span><span class='line'><span class="cm">--[[</span>
-</span><span class='line'><span class="cm">Java 方法原型:</span>
-</span><span class='line'><span class="cm">public static void TestMethod1(final float integerValue)</span>
-</span><span class='line'><span class="cm">]]</span>
-</span><span class='line'><span class="c1">-- 调用成功</span>
-</span><span class='line'><span class="n">luaj</span><span class="p">.</span><span class="n">callStaticMethod</span><span class="p">(</span><span class="n">className</span><span class="p">,</span> <span class="s2">&quot;</span><span class="s">TestMethod1&quot;</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'><span class="cm">--[[</span>
-</span><span class='line'><span class="cm">Java 方法原型:</span>
-</span><span class='line'><span class="cm">public static void TestMethod2(final int integerValue)</span>
-</span><span class='line'><span class="cm">]]</span>
-</span><span class='line'><span class="c1">-- 调用失败，正确的方法签名应该是 (I)V</span>
-</span><span class='line'><span class="n">luaj</span><span class="p">.</span><span class="n">callStaticMethod</span><span class="p">(</span><span class="n">className</span><span class="p">,</span> <span class="s2">&quot;</span><span class="s">TestMethod2&quot;</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>为此，luaj 允许开发者指定完整的方法签名。而且除了整数和浮点数的情况，在需要从 Java 方法获得返回值时，也需要开发者指定完整的方法签名。示例代码如下：</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-</pre></td><td class='code'><pre><code class='lua'><span class='line'><span class="kd">local</span> <span class="n">args</span> <span class="o">=</span><span class="p">{</span><span class="s2">&quot;</span><span class="s">StringValue&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">3.14</span><span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'><span class="cm">--[[</span>
-</span><span class='line'><span class="cm">Java 方法原型:</span>
-</span><span class='line'><span class="cm">public static int TestMethod3(final String stringValue,</span>
-</span><span class='line'><span class="cm">        final int integerValue,</span>
-</span><span class='line'><span class="cm">        final float floatValue)</span>
-</span><span class='line'><span class="cm">]]</span>
-</span><span class='line'>
-</span><span class='line'><span class="c1">-- 定义签名</span>
-</span><span class='line'><span class="c1">-- 参数: [S]tring, [I]nteger, [F]loat</span>
-</span><span class='line'><span class="c1">-- 返回值: [I]nt</span>
-</span><span class='line'><span class="kd">local</span> <span class="n">sig</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="s">(Ljava/lang/String;IF)I&quot;</span>
-</span><span class='line'>
-</span><span class='line'><span class="c1">-- 调用方法并获得返回值</span>
-</span><span class='line'><span class="kd">local</span> <span class="n">ok</span><span class="p">,</span> <span class="n">ret</span> <span class="o">=</span> <span class="n">luaj</span><span class="p">.</span><span class="n">callStaticMethod</span><span class="p">(</span><span class="n">className</span><span class="p">,</span> <span class="s2">&quot;</span><span class="s">TestMethod3&quot;</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">sig</span><span class="p">)</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>~</p>
-
-<p>签名使用“<em>(依次排列的参数类型)返回值类型</em>”的格式，几个例子如下：</p>
-
-<table>
-<thead>
-<tr>
-<th>签名                       </th>
-<th> 解释</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>()V                       </td>
-<td> 参数：无，返回值：无</td>
-</tr>
-<tr>
-<td>(I)V                      </td>
-<td> 参数：int，返回值：无</td>
-</tr>
-<tr>
-<td>(Ljava/lang/String;)Z     </td>
-<td> 参数：字符串，返回值：布尔值</td>
-</tr>
-<tr>
-<td>(IF)Ljava/lang/String;    </td>
-<td> 参数：整数、浮点数，返回值：字符串</td>
-</tr>
-</tbody>
-</table>
-
-
-<p>这里列出不同类型对应的 Java 签名字符串：</p>
-
-<table>
-<thead>
-<tr>
-<th>类型名               </th>
-<th> 类型</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>I                   </td>
-<td> 整数，或者 Lua function</td>
-</tr>
-<tr>
-<td>F                   </td>
-<td> 浮点数</td>
-</tr>
-<tr>
-<td>Z                   </td>
-<td> 布尔值</td>
-</tr>
-<tr>
-<td>Ljava/lang/String;  </td>
-<td> 字符串</td>
-</tr>
-<tr>
-<td>V                   </td>
-<td> Void 空，仅用于指定一个 Java 方法不返回任何值</td>
-</tr>
-</tbody>
-</table>
-
-
-<p>Java 方法里接收 Lua function 的参数必须定义为 int 类型，具体原因详见“<a href="#E5B08620lua20function20E4BD9CE4B8BAE58F82E695B0E4BCA0E98092E7BB9920java20E696B9E6B395">将 Lua function 作为参数传递给 Java 方法</a>”小节。</p>
-
-<p>~</p>
-
-<h3>检查调用结果，并从 Java 方法获取返回值</h3>
-
-<p>luaj 调用 Java 方法时，可能会出现各种错误，因此 luaj 提供了一种机制让 Lua 调用代码可以确定 Java 方法是否成功调用。</p>
-
-<p>luaj.callStaticMethod() 会返回两个值：</p>
-
-<ul>
-<li>当成功时，第一个值为 true，第二个值是 Java 方法的返回值（如果有）。</li>
-<li>当失败时，第一个值为 false，第二个值是错误代码。</li>
-</ul>
-
-
-<p>下面的代码展示了如何检查返回结果和获得返回值：</p>
-
-<figure class='code'><figcaption><span>Java 代码</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="kd">public</span> <span class="kd">static</span> <span class="kt">int</span> <span class="nf">AddTwoNumbers</span><span class="o">(</span><span class="kd">final</span> <span class="kt">int</span> <span class="n">number1</span><span class="o">,</span>
-</span><span class='line'>        <span class="kd">final</span> <span class="kt">int</span> <span class="n">number2</span><span class="o">)</span> <span class="o">{</span>
-</span><span class='line'>    <span class="k">return</span> <span class="n">number1</span> <span class="o">+</span> <span class="n">number2</span><span class="o">;</span>
-</span><span class='line'><span class="o">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-
-
-<figure class='code'><figcaption><span>Lua 代码</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-</pre></td><td class='code'><pre><code class='lua'><span class='line'><span class="kd">local</span> <span class="n">args</span> <span class="o">=</span> <span class="p">{</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">}</span>
-</span><span class='line'><span class="kd">local</span> <span class="n">sig</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="s">(II)I&quot;</span>
-</span><span class='line'><span class="kd">local</span> <span class="n">ok</span><span class="p">,</span> <span class="n">ret</span> <span class="o">=</span> <span class="n">luaj</span><span class="p">.</span><span class="n">callStaticMethod</span><span class="p">(</span><span class="n">className</span><span class="p">,</span> <span class="s2">&quot;</span><span class="s">AddTwoNumbers&quot;</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">sig</span><span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'><span class="k">if</span> <span class="ow">not</span> <span class="n">ok</span> <span class="k">then</span>
-</span><span class='line'>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="s">luaj error:&quot;</span><span class="p">,</span> <span class="n">ret</span><span class="p">)</span>
-</span><span class='line'><span class="k">else</span>
-</span><span class='line'>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="s">ret:&quot;</span><span class="p">,</span> <span class="n">ret</span><span class="p">)</span> <span class="c1">-- 输出 ret: 5</span>
-</span><span class='line'><span class="k">end</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>~</p>
-
-<p>错误代码定义如下：</p>
-
-<table>
-<thead>
-<tr>
-<th>错误代码  </th>
-<th> 描述</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>-1      </td>
-<td> 不支持的参数类型或返回值类型</td>
-</tr>
-<tr>
-<td>-2      </td>
-<td> 无效的签名</td>
-</tr>
-<tr>
-<td>-3      </td>
-<td> 没有找到指定的方法</td>
-</tr>
-<tr>
-<td>-4      </td>
-<td> Java 方法执行时抛出了异常</td>
-</tr>
-<tr>
-<td>-5      </td>
-<td> Java 虚拟机出错</td>
-</tr>
-<tr>
-<td>-6      </td>
-<td> Java 虚拟机出错</td>
-</tr>
-</tbody>
-</table>
-
-
-<p>~</p>
-
-<h3>将 Lua function 作为参数传递给 Java 方法</h3>
-
-<p>很多时候，我们需要一种方法让 Java 代码可以向 Lua 代码传递一些消息。例如在大部分游戏平台的 SDK 中，涉及支付的部分都是异步操作的。在支付操作结束后，Java 代码需要通知 Lua 支付成功与否。</p>
-
-<p>Lua 虚拟机中，Lua function 以值的形式保存。但这个值无法直接给 Java 用，所以 luaj 做了一个 Lua function 引用表。当一个 Lua function 传递给 Java 时，这个 function 对应的值会被存在引用表中，并获得一个唯一的引用 ID （整数）。Java 代码拿到这个引用 ID 后，就可以很方便的调用该 Lua function 了。</p>
-
-<p>回顾最开始的示例代码，GameInterface_doBilling() 函数用于接收 Lua function 的参数就是 int 类型。因为实际传入 Java 函数的值是 Lua function 的引用 Id。</p>
-
-<p>~</p>
-
-<h3>在 Java 方法中调用 Lua function</h3>
-
-<p>在 Java 代码中拿到 Lua function 的引用 ID 后，就可以很方便的调用该 Lua function 了：</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="n">LuaJavaBridge</span><span class="o">.</span><span class="na">callLuaFunctionWithString</span><span class="o">(</span><span class="n">luaFunctionId</span><span class="o">,</span> <span class="s">&quot;hello&quot;</span><span class="o">);</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>这里出现的 LuaJavaBridge 是 luaj 的 Java 部分定义的工具 class。 callLuaFunctionWithString() 方法可以将一个字符串参数传递给指定的 Lua function。</p>
-
-<p>LuaJavaBridge 还提供了 callLuaGlobalFunctionWithString() 方法，可以直接调用 Lua 中指定名字的全局函数。这样可以在没有 Lua function 引用 ID 的情况下和 Lua 代码交互。</p>
-
-<p>由于自己的项目暂时没更多需求，所以目前 luaj 只支持向 Lua function 传递单个字符串参数。</p>
-
-<p>~</p>
-
-<h2>GL 线程和 UI 线程的协调</h2>
-
-<p>cocos2d-x for Android 运行在多线程环境下，所以在 Lua 和 Java 交互时需要注意选择适当的线程。</p>
-
-<p>~</p>
-
-<p>cocos2d-x 在 Android 上以两个线程来运行，分别是负责图像渲染的 GL 线程和负责 Android 系统用户界面的 UI 线程。</p>
-
-<ul>
-<li>在 cocos2d-x 启动后，Lua 代码将由 GL 线程调用，因此从 Lua 中调用的 Java 方法如果涉及到系统用户界面的显示、更新操作，那么就必须让这部分代码切换到 UI 线程上去运行。</li>
-<li>反之亦然，从 Java 调用 Lua 代码时，需要让这个调用在 GL 线程上执行，否则 Lua 代码虽然执行了，但会无法更新 cocos2d-x 内部状态。</li>
-</ul>
-
-
-<p>下面是 GameInterface_doBilling() 方法的主要代码：</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">GameInterface_doBilling</span><span class="o">(</span><span class="kd">final</span> <span class="n">String</span> <span class="n">billingIndex</span><span class="o">,</span>
-</span><span class='line'>    <span class="kd">final</span> <span class="kt">boolean</span> <span class="n">useSms</span><span class="o">,</span>
-</span><span class='line'>    <span class="kd">final</span> <span class="kt">boolean</span> <span class="n">isRepeated</span><span class="o">,</span>
-</span><span class='line'>    <span class="kd">final</span> <span class="kt">int</span> <span class="n">luaFunctionId</span><span class="o">)</span> <span class="o">{</span>
-</span><span class='line'>  <span class="n">context</span><span class="o">.</span><span class="na">runOnUiThread</span><span class="o">(</span><span class="k">new</span> <span class="n">Runnable</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>    <span class="nd">@Override</span>
-</span><span class='line'>    <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>      <span class="n">GameInterface</span><span class="o">.</span><span class="na">doBilling</span><span class="o">(</span><span class="n">useSms</span><span class="o">,</span> <span class="n">isRepeated</span><span class="o">,</span> <span class="n">billingIndex</span><span class="o">,</span> <span class="k">new</span> <span class="n">BillingCallback</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>
-</span><span class='line'>        <span class="o">...</span>
-</span><span class='line'>
-</span><span class='line'>        <span class="nd">@Override</span>
-</span><span class='line'>        <span class="kd">public</span> <span class="kt">void</span> <span class="nf">onBillingSuccess</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>          <span class="n">context</span><span class="o">.</span><span class="na">runOnGLThread</span><span class="o">(</span><span class="k">new</span> <span class="n">Runnable</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>            <span class="nd">@Override</span>
-</span><span class='line'>            <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">()</span> <span class="o">{</span>
-</span><span class='line'>              <span class="n">LuaJavaBridge</span><span class="o">.</span><span class="na">callLuaFunctionWithString</span><span class="o">(</span><span class="n">luaFunctionId</span><span class="o">,</span> <span class="s">&quot;success&quot;</span><span class="o">);</span>
-</span><span class='line'>              <span class="n">LuaJavaBridge</span><span class="o">.</span><span class="na">releaseLuaFunction</span><span class="o">(</span><span class="n">luaFunctionId</span><span class="o">);</span>
-</span><span class='line'>            <span class="o">}</span>
-</span><span class='line'>          <span class="o">});</span>
-</span><span class='line'>        <span class="o">}</span>
-</span><span class='line'>
-</span><span class='line'>        <span class="o">...</span>
-</span><span class='line'>
-</span><span class='line'>      <span class="o">});</span>
-</span><span class='line'>    <span class="o">}</span>
-</span><span class='line'>  <span class="o">});</span>
-</span><span class='line'><span class="o">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>~</p>
-
-<p>方法中，构造了一个 Runnable 对象，用来包装需要执行的 Java 代码。这个 Runnable 对象被指定运行在 UI 线程上。这样当调用 GameInterface.doBilling() 方法时就可以正确显示出支付界面。</p>
-
-<p>当用户支付成功后，GameInterface.doBilling() 会调用 BillingCallback.onBillingSuccess() 方法。这个方法里构造了另一个 Runnable 对象，包装了调用 Lua function 的代码。</p>
-
-<p>看上去代码不少，实际上就是在两个线程间互相切换。确保 Lua function 跑在 GL 线程，Java 代码跑在 UI 线程。</p>
-
-<p>~</p>
-
-<h3>Lua function 的引用计数器</h3>
-
-<p>Lua 虚拟机具有自动垃圾回收机制。Lua function 既然是值，那么在没有被使用时自然会被回收掉。所以 luaj 提供了 retainLuaFunction() 和 releaseLuaFunction() 两个函数用于增减 Lua function 的引用计数。</p>
-
-<p>将一个 Lua function 以引用 ID 的形式传入 Java 时，<em>luaj 会自动增加引用 ID 的计数器</em>，所以在 Java 方法里可以放心的异步调用 Lua function。但在不需要使用该 Lua function 后，一定要<em>调用 releaseLuaFunction() 减少该引用 ID 的计数器</em>。当计数器为 0 时，会自动释放该 Lua function。</p>
-
-<p>如果了解 cocos2d-x 中 CCObject 的 autorelease 机制，那么对引用计数应该很熟悉，两者是完全相同的实现机制。</p>
-
-<p>~</p>
-
-<h2>连接第三方 SDK 和 cocos2d-x 的中间层</h2>
-
-<p>虽然 luaj 可以让开发者从 Lua 中直接调用 Java 代码。但大部分第三方 SDK 在初始化时都需要指定当前应用程序的 Activity 对象，并且还要切换不同线程，所以对于大多数第三方 SDK，我们仍然要写一个中间层用于 Lua 和 Java 的交互。</p>
-
-<p>与使用 JNI 做中间层相比，配合 luja 的中间层是使用 Java 来编写的，不但更简单明了，而且处理线程切换也非常简单。</p>
-
-<p>~</p>
-
-<p>要实现一个中间层，只有两个步骤：</p>
-
-<ul>
-<li>实现供 luaj 调用的 Java 接口</li>
-<li>修改游戏的 Java 入口文件，将应用程序的 Activity 对象传入 SDK</li>
-</ul>
-
-
-<p>第一步请参考：<a href="https://gist.github.com/4447302">“中国移动游戏基地和短信支付 SDK”中间层源代码</a></p>
-
-<p>第二步也相当简单，只需要在游戏的 onCreate() 中调用 中间层 class 的 setContext() 方法：</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="kd">public</span> <span class="kd">class</span> <span class="nc">mygame</span> <span class="kd">extends</span> <span class="n">Cocos2dxActivity</span> <span class="o">{</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="kd">protected</span> <span class="kt">void</span> <span class="nf">onCreate</span><span class="o">(</span><span class="n">Bundle</span> <span class="n">savedInstanceState</span><span class="o">)</span> <span class="o">{</span>
-</span><span class='line'>    <span class="n">ChinaMobile_SDK</span><span class="o">.</span><span class="na">setContext</span><span class="o">(</span><span class="k">this</span><span class="o">);</span> <span class="c1">// init sdk</span>
-</span><span class='line'>    <span class="kd">super</span><span class="o">.</span><span class="na">onCreate</span><span class="o">(</span><span class="n">savedInstanceState</span><span class="o">);</span>
-</span><span class='line'>  <span class="o">}</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="o">...</span>
-</span><span class='line'>
-</span><span class='line'><span class="o">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>~</p>
-
-<p>做好一切准备工作后，在游戏的 Lua 代码里访问 SDK 功能就很简单了：</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-<span class='line-number'>29</span>
-<span class='line-number'>30</span>
-<span class='line-number'>31</span>
-<span class='line-number'>32</span>
-<span class='line-number'>33</span>
-<span class='line-number'>34</span>
-<span class='line-number'>35</span>
-<span class='line-number'>36</span>
-<span class='line-number'>37</span>
-</pre></td><td class='code'><pre><code class='lua'><span class='line'><span class="kd">local</span> <span class="n">luaj</span> <span class="o">=</span> <span class="nb">require</span><span class="p">(</span><span class="s2">&quot;</span><span class="s">luaj&quot;</span><span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">local</span> <span class="n">className</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="s">com/qeeplay/frameworks/ChinaMobile_SDK&quot;</span>
-</span><span class='line'>
-</span><span class='line'><span class="c1">-- 初始化 SDK</span>
-</span><span class='line'><span class="kd">local</span> <span class="n">args</span> <span class="o">=</span> <span class="p">{</span>
-</span><span class='line'>  <span class="n">CHINA_MOBILE_SP_APP_NAME</span><span class="p">,</span>
-</span><span class='line'>  <span class="n">CHINA_MOBILE_SP_CP_NAME</span><span class="p">,</span>
-</span><span class='line'>  <span class="n">CHINA_MOBILE_SP_TEL</span>
-</span><span class='line'><span class="p">}</span>
-</span><span class='line'><span class="n">luaj</span><span class="p">.</span><span class="n">callStaticMethod</span><span class="p">(</span><span class="n">className</span><span class="p">,</span> <span class="s2">&quot;</span><span class="s">GameInterface_initializeApp&quot;</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'><span class="c1">-- 支付</span>
-</span><span class='line'><span class="kd">local</span> <span class="k">function</span> <span class="nf">callback</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
-</span><span class='line'>  <span class="k">if</span> <span class="n">result</span> <span class="o">==</span> <span class="s2">&quot;</span><span class="s">success&quot;</span> <span class="k">then</span>
-</span><span class='line'>    <span class="c1">-- 支付成功</span>
-</span><span class='line'>  <span class="k">end</span>
-</span><span class='line'><span class="k">end</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">local</span> <span class="n">args</span> <span class="o">=</span> <span class="p">{</span>
-</span><span class='line'>  <span class="n">billingIndex</span><span class="p">,</span>
-</span><span class='line'>  <span class="kc">true</span><span class="p">,</span>
-</span><span class='line'>  <span class="kc">true</span><span class="p">,</span>
-</span><span class='line'>  <span class="n">callback</span>
-</span><span class='line'><span class="p">}</span>
-</span><span class='line'><span class="n">luaj</span><span class="p">.</span><span class="n">callStaticMethod</span><span class="p">(</span><span class="n">className</span><span class="p">,</span> <span class="s2">&quot;</span><span class="s">GameInterface_doBilling&quot;</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'><span class="c1">-- 显示游戏基地界面</span>
-</span><span class='line'><span class="n">luaj</span><span class="p">.</span><span class="n">callStaticMethod</span><span class="p">(</span><span class="n">className</span><span class="p">,</span> <span class="s2">&quot;</span><span class="s">GameCommunity_launchGameCommunity&quot;</span><span class="p">)</span>
-</span><span class='line'>
-</span><span class='line'><span class="c1">-- 提交玩家的游戏成绩</span>
-</span><span class='line'><span class="kd">local</span> <span class="n">args</span> <span class="o">=</span> <span class="p">{</span>
-</span><span class='line'>  <span class="s2">&quot;</span><span class="s">0&quot;</span><span class="p">,</span>            <span class="c1">-- 排行榜Id</span>
-</span><span class='line'>  <span class="n">newBestScores</span><span class="p">,</span>  <span class="c1">-- 新的最佳成绩</span>
-</span><span class='line'><span class="p">}</span>
-</span><span class='line'><span class="kd">local</span> <span class="n">sig</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="s">(Ljava/lang/String;I)V&quot;</span>
-</span><span class='line'><span class="n">luaj</span><span class="p">.</span><span class="n">callStaticMethod</span><span class="p">(</span><span class="n">className</span><span class="p">,</span> <span class="s2">&quot;</span><span class="s">GameCommunity_commitScoreWithRank&quot;</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">sig</span><span class="p">)</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>~</p>
-
-<h2>安装 luaj</h2>
-
-<p>luaj 分为三个部分：</p>
-
-<ul>
-<li>LuaJavaBridge.java, com_qeeplay_frameworks_LuaJavaBridge.h/.cpp - 供 Java 端使用的工具类，包含 Java 接口定义文件和 JNI 实现。</li>
-<li>LuaJavaBridge.h/.cpp - 供 Lua 端使用的工具类。</li>
-<li>luaj.lua - LuaJavaBridge 的 Lua 包装，提供更简单和灵活的接口。</li>
-</ul>
-
-
-<p>下载地址：</p>
-
-<ul>
-<li><a href="https://github.com/dualface/quick-cocos2d-x/tree/luajit/hosts/libs/luaj">Java/C++ 部分源代码</a></li>
-<li><a href="https://github.com/dualface/quick-cocos2d-x/blob/luajit/framework/client/luaj.lua">Lua 部分源代码</a></li>
-</ul>
-
-
-<p>~</p>
-
-<p>步骤：</p>
-
-<ul>
-<li>将 LuaJavaBridge.java 添加到 Android 项目中；</li>
-<li>修改 proj.android/jni/Android.mk：</li>
-</ul>
-
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-</pre></td><td class='code'><pre><code class='makefile'><span class='line'><span class="nv">LOCAL_SRC_FILES</span> <span class="o">:=</span> ... <span class="se">\</span>
-</span><span class='line'>    luaj/jni/com_qeeplay_frameworks_LuaJavaBridge.cpp <span class="se">\</span>
-</span><span class='line'>    luaj/luabinding/LuaJavaBridge.cpp
-</span><span class='line'>
-</span><span class='line'>LOCAL_C_INCLUDES :<span class="o">=</span> ... <span class="se">\</span>
-</span><span class='line'>    luaj
-</span></code></pre></td></tr></table></div></figure>
-
-
-<ul>
-<li>修改 AppDelegate.cpp，加入以下代码：</li>
-</ul>
-
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-</pre></td><td class='code'><pre><code class='makefile'><span class='line'><span class="c">#if (CC_TARGET_PLATFORM == CC_PLATFORM_ANDROID)</span>
-</span><span class='line'><span class="c">#include &quot;LuaJavaBridge.h&quot;</span>
-</span><span class='line'><span class="c">#endif</span>
-</span><span class='line'>
-</span><span class='line'><span class="nf">bool AppDelegate</span><span class="o">::</span><span class="m">applicationDidFinishLaunching()</span>
-</span><span class='line'><span class="err">{</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="err">...</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="nf">CCLuaEngine* pEngine = CCLuaEngine</span><span class="o">::</span><span class="m">defaultEngine();</span>
-</span><span class='line'>  CCScriptEngineManager::sharedManager<span class="o">()</span>-&gt;setScriptEngine<span class="o">(</span>pEngine<span class="o">)</span>;
-</span><span class='line'>
-</span><span class='line'><span class="c">#if (CC_TARGET_PLATFORM == CC_PLATFORM_ANDROID)</span>
-</span><span class='line'>  LuaJavaBridge_luabinding_open<span class="o">(</span>pEngine-&gt;getLuaState<span class="o">())</span>;
-</span><span class='line'><span class="c">#endif</span>
-</span><span class='line'>
-</span><span class='line'>  ...
-</span><span class='line'><span class="err">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<ul>
-<li>修改proj.android/jni/hellocpp/main.cpp，加入以下代码：</li>
-</ul>
-
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-</pre></td><td class='code'><pre><code class='c++'><span class='line'><span class="n">jint</span> <span class="n">JNI_OnLoad</span><span class="p">(</span><span class="n">JavaVM</span> <span class="o">*</span><span class="n">vm</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">reserved</span><span class="p">)</span>
-</span><span class='line'><span class="p">{</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="p">...</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="n">LuaJavaBridge_setJavaVM</span><span class="p">(</span><span class="n">vm</span><span class="p">);</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="k">return</span> <span class="n">JNI_VERSION_1_4</span><span class="p">;</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>~</p>
-
-<h2>luaj 方法参考</h2>
-
-<ul>
-<li><p><code>[Lua] luaj.callStaticMethod(className, methodName, args, methodSig)</code></p>
-
-<p>调用指定的 Java class static method，允许传入 int/float/boolean/string/function 五种类型的参数。</p></li>
-<li><p><code>[Java] LuaJavaBridge.callLuaFunctionWithString(int luaFunctionId, String value)</code></p>
-
-<p>调用引用 ID 指向的 Lua function，并传入一个字符串作为参数。</p></li>
-<li><p><code>[Java] LuaJavaBridge.callLuaGlobalFunctionWithString(int luaFunctionId, String value)</code></p>
-
-<p>调用指定名字的 Lua 全局函数，并传入一个字符串作为参数。</p></li>
-<li><p><code>[Java] LuaJavaBridge.retainLuaFunction(int luaFunctionId)</code></p>
-
-<p>增加引用 ID 的计数，确保 Lua function 不会被 Lua 虚拟机自动回收。</p></li>
-<li><p><code>[Java] LuaJavaBridge.releaseLuaFunction(int luaFunctionId)</code></p>
-
-<p>减少引用 ID 的计数，当计数等于 0 时，引用 ID 指向的 Lua function 将被回收。</p></li>
-</ul>
-
-
-<p>~</p>
-
-<h2>未来改进</h2>
-
-<p>因为我们自己的项目暂时还没有更复杂的需求，所以 luaj 目前的实现很简单。但要在这个基础上进行完善是很容易的事情，luaj 已经解决了几个关键性问题。</p>
-
-<p>未来计划会增加的主要特性就是支持更多的类型，例如将一个以字符串为键名的 Lua table 以 Java Map 集合的形式传递给 Java。同样，从 Java 调用 Lua 函数时，也应该支持多个参数，以及更多的参数类型。</p>
-
-<p>至于将 Java 对象传入 Lua，并在 Lua 中调用 Java 对象的方法，目前没这个打算。因为 luaj 的主要目的是为 cocos2d-x 游戏服务，而 cocos2d-x 的多线程模式要求 Lua 和 Java 代码必须在不同的线程里运行。如果在 Lua 中调用 Java 对象方法将面对许多复杂的问题。与其花大量时间去解决这个问题（还不一定能保证最后简单易用），不如简单写一个中间层。</p>
-
-<p>最后，luaj 已经被集成到了 quick-cocos2d-x 这个基于 cocos2d-x 的快速游戏开发引擎中。quick-cocos2d-x 让开发者可以使用 Lua 语言开发高质量的商业游戏，同时又保持 cocos2d-x 的高性能、开放性、可扩展能力。并且 quick-cocos2d-x 使用最新的 LuaJIT 实现，可以让 Lua 脚本获得数倍到数十倍的性能提升。</p>
-
-<p>惯例为广大程序猿送上福利美图一张 :-)</p>
-
-<p><img src="http://dualface.github.com/upload/2013-01/2013-01-01.jpg" alt="" /></p>
-
-<p>~</p>
-
-<h2>关于 quick-cocos2d-x</h2>
-
-<p>LuaJavaBridge 已经集成到 quick-cocos2d-x 这个开源项目中，<a href="https://github.com/dualface/quick-cocos2d-x/wiki/HOWTO-~-Call-Java-from-Lua,-and-call-Lua-from-Java">用法说明</a> .</p>
-
-<p>quick-cocos2d-x 是一个可以让您觉得“爽快”的 cocos2d-x 的扩展版。基于 cocos2d-x，完全的跨平台能力、优异的性能和可靠性。而 quick-cocos2d-x 在这一切的基础上，添加了完善的 Lua 脚本语言支持，让开发者可以使用 Lua 这种简单易用的脚本语言完成商业品质的移动游戏。</p>
-
-<p><a href="https://github.com/dualface/quick-cocos2d-x">https://github.com/dualface/quick-cocos2d-x</a></p>
-
-<p>- EOF -</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[tolua++ 实现分析]]></title>
-    <link href="http://dualface.github.com/blog/2012/08/25/tolua-plus-plus-implement/"/>
-    <updated>2012-08-25T11:05:00+08:00</updated>
-    <id>http://dualface.github.com/blog/2012/08/25/tolua-plus-plus-implement</id>
-    <content type="html"><![CDATA[<p>tolua++ 是一个将 C/C++ 的函数和对象导出给 Lua 脚本使用的工具。</p>
-
-<p>使用这个工具的基本步骤：</p>
-
-<ul>
-<li>将要导出的 C/C++ 函数和对象定义写入 .pkg 文件；</li>
-<li>运行 tolua++ 工具，将 .pkg 文件编译为目标 .cpp 文件；</li>
-<li>将目标 .cpp 文件加入项目，在启用 Lua 虚拟机后调用目标文件中的 open() 函数注册导出的内容。</li>
-</ul>
-
-
-<!--more-->
-
-
-<p>~</p>
-
-<h2>tolua++ 工具生成的目标文件</h2>
-
-<p>每个目标文件都是从一系列 .pkg 文件编译而来，主要完成下列功能：</p>
-
-<ul>
-<li>定义所有从 C/C++ 导出的类型、函数和对象；</li>
-<li>注册所有类型及其方法。</li>
-</ul>
-
-
-<p>~</p>
-
-<h3>定义要导出的方法</h3>
-
-<p>不管是 C 函数还是 C++ 对象的方法，都一律导出为静态函数。</p>
-
-<p>C 函数的导出形式如下：</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-</pre></td><td class='code'><pre><code class='lua'><span class='line'><span class="n">static</span> <span class="n">int</span> <span class="n">tolua_math2dx_luabinding_dist00</span><span class="p">(</span><span class="n">lua_State</span><span class="o">*</span> <span class="n">tolua_S</span><span class="p">)</span>
-</span><span class='line'><span class="p">{</span>
-</span><span class='line'>    <span class="n">tolua_Error</span> <span class="n">tolua_err</span><span class="p">;</span>
-</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="err">!</span><span class="n">tolua_isnumber</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">)</span> <span class="err">||</span>
-</span><span class='line'>        <span class="err">!</span><span class="n">tolua_isnumber</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">)</span> <span class="err">||</span>
-</span><span class='line'>        <span class="err">!</span><span class="n">tolua_isnumber</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">)</span> <span class="err">||</span>
-</span><span class='line'>        <span class="err">!</span><span class="n">tolua_isnumber</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">4</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">)</span> <span class="err">||</span>
-</span><span class='line'>        <span class="err">!</span><span class="n">tolua_isnoobj</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">5</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">))</span>
-</span><span class='line'>    <span class="p">{</span>
-</span><span class='line'>        <span class="n">goto</span> <span class="n">tolua_lerror</span><span class="p">;</span>
-</span><span class='line'>    <span class="p">}</span>
-</span><span class='line'>    <span class="k">else</span>
-</span><span class='line'>    <span class="p">{</span>
-</span><span class='line'>        <span class="n">float</span> <span class="n">p1x</span> <span class="o">=</span> <span class="p">(</span><span class="n">float</span><span class="p">)</span><span class="n">tolua_tonumber</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">);</span>
-</span><span class='line'>        <span class="n">float</span> <span class="n">p1y</span> <span class="o">=</span> <span class="p">(</span><span class="n">float</span><span class="p">)</span><span class="n">tolua_tonumber</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">0</span><span class="p">);</span>
-</span><span class='line'>        <span class="n">float</span> <span class="n">p2x</span> <span class="o">=</span> <span class="p">(</span><span class="n">float</span><span class="p">)</span><span class="n">tolua_tonumber</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">0</span><span class="p">);</span>
-</span><span class='line'>        <span class="n">float</span> <span class="n">p2y</span> <span class="o">=</span> <span class="p">(</span><span class="n">float</span><span class="p">)</span><span class="n">tolua_tonumber</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">4</span><span class="p">,</span><span class="mi">0</span><span class="p">);</span>
-</span><span class='line'>        <span class="p">{</span>
-</span><span class='line'>            <span class="n">float</span> <span class="n">tolua_ret</span> <span class="o">=</span> <span class="n">dist</span><span class="p">(</span><span class="n">p1x</span><span class="p">,</span> <span class="n">p1y</span><span class="p">,</span> <span class="n">p2x</span><span class="p">,</span> <span class="n">p2y</span><span class="p">);</span>
-</span><span class='line'>            <span class="n">tolua_pushnumber</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span> <span class="n">tolua_ret</span><span class="p">);</span>
-</span><span class='line'>        <span class="p">}</span>
-</span><span class='line'>    <span class="p">}</span>
-</span><span class='line'>    <span class="k">return</span> <span class="mi">1</span><span class="p">;</span>
-</span><span class='line'><span class="n">tolua_lerror</span><span class="p">:</span>
-</span><span class='line'>    <span class="n">tolua_error</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="s2">&quot;</span><span class="s">#ferror in function &#39;dist&#39;.&quot;</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">);</span>
-</span><span class='line'>    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>由于这个导出模块的名字是 math2dx_luabinding，所以导出函数的前缀就是 tolua_math2dx_luabinding_ 。而导出函数 dist 的名字也添加了后缀 00 用于区别可能存在的函数重载。</p>
-
-<p>导出函数 dist00() 的执行步骤：</p>
-
-<ol>
-<li>首先从 stack 提取函数的参数，并一一判断类型。如果类型不符，则输出错误信息并中断执行。</li>
-<li>将参数复制到临时变量中，然后调用目标函数 dist()，并将结果（如果 dist() 有返回值）push 到 stack。</li>
-<li>dist00() 最后返回 dist() 函数的返回值的个数。</li>
-</ol>
-
-
-<p>~</p>
-
-<p>对于 C++ 对象，方法则分为类静态方法和实例方法两种情况。</p>
-
-<p>由于 tolua++ 导出的 C++ 类静态方法用“:”操作符调用：</p>
-
-<pre><code>local request = CCHttpRequest:create()
-</code></pre>
-
-<p>因此导出函数里要求传入的第一个参数是 CCHttpRequest 模块：</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-<span class='line-number'>29</span>
-</pre></td><td class='code'><pre><code class='lua'><span class='line'><span class="o">//</span> <span class="n">CCHttpRequest</span><span class="p">:</span><span class="n">create</span><span class="p">()</span>
-</span><span class='line'><span class="n">static</span> <span class="n">int</span> <span class="n">tolua_cocos2dx_extension_network_CCHttpRequest_create00</span><span class="p">(</span><span class="n">lua_State</span><span class="o">*</span> <span class="n">tolua_S</span><span class="p">)</span>
-</span><span class='line'><span class="p">{</span>
-</span><span class='line'>    <span class="n">tolua_Error</span> <span class="n">tolua_err</span><span class="p">;</span>
-</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="err">!</span><span class="n">tolua_isusertable</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="s2">&quot;</span><span class="s">CCHttpRequest&quot;</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">)</span> <span class="err">||</span>
-</span><span class='line'>        <span class="p">(</span><span class="n">tolua_isvaluenil</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">)</span> <span class="err">||</span>
-</span><span class='line'>            <span class="err">!</span><span class="n">toluafix_isfunction</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="s2">&quot;</span><span class="s">LUA_FUNCTION&quot;</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">))</span> <span class="err">||</span>
-</span><span class='line'>        <span class="err">!</span><span class="n">tolua_isstring</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">)</span> <span class="err">||</span>
-</span><span class='line'>        <span class="err">!</span><span class="n">tolua_isnumber</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">4</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">)</span> <span class="err">||</span>
-</span><span class='line'>        <span class="err">!</span><span class="n">tolua_isnoobj</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">5</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">))</span>
-</span><span class='line'>    <span class="p">{</span>
-</span><span class='line'>        <span class="n">goto</span> <span class="n">tolua_lerror</span><span class="p">;</span>
-</span><span class='line'>    <span class="p">}</span>
-</span><span class='line'>    <span class="k">else</span>
-</span><span class='line'>    <span class="p">{</span>
-</span><span class='line'>        <span class="n">LUA_FUNCTION</span> <span class="n">listener</span> <span class="o">=</span> <span class="n">toluafix_ref_function</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">0</span><span class="p">);</span>
-</span><span class='line'>        <span class="n">const</span> <span class="n">char</span><span class="o">*</span> <span class="n">url</span> <span class="o">=</span> <span class="p">(</span><span class="n">const</span> <span class="n">char</span><span class="o">*</span><span class="p">)</span><span class="n">tolua_tostring</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">0</span><span class="p">);</span>
-</span><span class='line'>        <span class="n">CCHttpRequestMethod</span> <span class="n">method</span> <span class="o">=</span> <span class="p">(</span><span class="n">CCHttpRequestMethod</span><span class="p">)</span><span class="n">tolua_tonumber</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span>
-</span><span class='line'>                <span class="mi">4</span><span class="p">,</span><span class="n">CCHttpRequestMethodGET</span><span class="p">);</span>
-</span><span class='line'>        <span class="p">{</span>
-</span><span class='line'>            <span class="n">CCHttpRequest</span><span class="o">*</span> <span class="n">tolua_ret</span> <span class="o">=</span> <span class="n">CCHttpRequest</span><span class="p">::</span><span class="n">create</span><span class="p">(</span><span class="n">listener</span><span class="p">,</span><span class="n">url</span><span class="p">,</span><span class="n">method</span><span class="p">);</span>
-</span><span class='line'>            <span class="n">tolua_pushusertype</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,(</span><span class="n">void</span><span class="o">*</span><span class="p">)</span><span class="n">tolua_ret</span><span class="p">,</span><span class="s2">&quot;</span><span class="s">CCHttpRequest&quot;</span><span class="p">);</span>
-</span><span class='line'>        <span class="p">}</span>
-</span><span class='line'>    <span class="p">}</span>
-</span><span class='line'>    <span class="k">return</span> <span class="mi">1</span><span class="p">;</span>
-</span><span class='line'><span class="n">tolua_lerror</span><span class="p">:</span>
-</span><span class='line'>    <span class="n">tolua_error</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="s2">&quot;</span><span class="s">#ferror in function &#39;create&#39;.&quot;</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">);</span>
-</span><span class='line'>    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>PS: 个人认为将 C++ 对象视为一个 Lua module 时，那么类静态方法的调用方式应该是 CCHttpRequest.create() 这样，以便和实例方法区别开。</p>
-
-<p>实例方法的导出区别不大，仅仅是需要检查 stack 中的第一个值是否是对象实例：</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-</pre></td><td class='code'><pre><code class='lua'><span class='line'><span class="o">//</span> <span class="n">CCHttpRequest</span><span class="p">:</span><span class="n">start</span><span class="p">()</span>
-</span><span class='line'><span class="n">static</span> <span class="n">int</span> <span class="n">tolua_cocos2dx_extension_network_CCHttpRequest_start00</span><span class="p">(</span><span class="n">lua_State</span><span class="o">*</span> <span class="n">tolua_S</span><span class="p">)</span>
-</span><span class='line'><span class="p">{</span>
-</span><span class='line'>    <span class="n">tolua_Error</span> <span class="n">tolua_err</span><span class="p">;</span>
-</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="err">!</span><span class="n">tolua_isusertype</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="s2">&quot;</span><span class="s">CCHttpRequest&quot;</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">)</span> <span class="err">||</span>
-</span><span class='line'>        <span class="err">!</span><span class="n">tolua_isboolean</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">)</span> <span class="err">||</span>
-</span><span class='line'>        <span class="err">!</span><span class="n">tolua_isnoobj</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">))</span>
-</span><span class='line'>    <span class="p">{</span>
-</span><span class='line'>        <span class="n">goto</span> <span class="n">tolua_lerror</span><span class="p">;</span>
-</span><span class='line'>    <span class="p">}</span>
-</span><span class='line'>    <span class="k">else</span>
-</span><span class='line'>    <span class="p">{</span>
-</span><span class='line'>        <span class="n">CCHttpRequest</span><span class="o">*</span> <span class="n">self</span> <span class="o">=</span> <span class="p">(</span><span class="n">CCHttpRequest</span><span class="o">*</span><span class="p">)</span><span class="n">tolua_tousertype</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">);</span>
-</span><span class='line'>        <span class="k">if</span> <span class="p">(</span><span class="err">!</span><span class="n">self</span><span class="p">)</span>
-</span><span class='line'>        <span class="p">{</span>
-</span><span class='line'>            <span class="n">tolua_error</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="s2">&quot;</span><span class="s">invalid &#39;self&#39; in function &#39;start&#39;&quot;</span><span class="p">,</span> <span class="n">NULL</span><span class="p">);</span>
-</span><span class='line'>        <span class="p">}</span>
-</span><span class='line'>        <span class="n">bool</span> <span class="n">isCached</span> <span class="o">=</span> <span class="p">(</span><span class="n">bool</span><span class="p">)</span><span class="n">tolua_toboolean</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="kc">false</span><span class="p">);</span>
-</span><span class='line'>        <span class="n">self</span><span class="o">-&gt;</span><span class="n">start</span><span class="p">(</span><span class="n">isCached</span><span class="p">);</span>
-</span><span class='line'>    <span class="p">}</span>
-</span><span class='line'>    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
-</span><span class='line'><span class="n">tolua_lerror</span><span class="p">:</span>
-</span><span class='line'>    <span class="n">tolua_error</span><span class="p">(</span><span class="n">tolua_S</span><span class="p">,</span><span class="s2">&quot;</span><span class="s">#ferror in function &#39;start&#39;.&quot;</span><span class="p">,</span><span class="err">&amp;</span><span class="n">tolua_err</span><span class="p">);</span>
-</span><span class='line'>    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>定义完所有要导出的方法后，tolua++ 目标文件将定义所有的模块并注册上述导出的方法。</p>
-
-<p>~</p>
-
-<h3>注册模块和方法</h3>
-
-<p>对于 C 函数，会添加到 Lua 的全局名字空间中，而每一个 C++ 对象，则会注册一个与类名相同的 table，并添加到全局名字空间。</p>
-
-<p>C++ 对象对应的 table 添加后，会将导出的类静态方法和实例方法添加到这个 table。</p>
-
-<p>~</p>
-
-<h2>tolua++ 库</h2>
-
-<p>要想让目标文件正常工作，还需要依赖 tolua++ 库提供的功能。这个库提供下列功能：</p>
-
-<ul>
-<li>push 各种值到 lua stack；</li>
-<li>push 一个对象或结构到 lua stack;</li>
-<li>从 lua stack 取出值或对象等；</li>
-<li>检查 lua stack 中值的类型；</li>
-<li>在 lua 值被回收时删除对象实例。</li>
-</ul>
-
-
-<p>其实这篇文章应该还有不少内容，但我实在是懒得写了。。。原谅我这个程序猿吧 -_-#</p>
-
-<p>因为下一篇文章才是我要说的重点 :)</p>
-
-<p>~</p>
-
+<p>经过上述设置后，对于不改变位置和缩放的 Tilemap 来说，已经可以做到清晰显示了，连接处也不会有缝隙。</p>
+<p>但如果是需要移动或者缩放的地图，那么还是会出现缝隙，这就需要作进一步的处理。</p>
+<h2 id="设置-1-Pixel-1-Unit"><a href="#设置-1-Pixel-1-Unit" class="headerlink" title="设置 1 Pixel / 1 Unit"></a>设置 1 Pixel / 1 Unit</h2><p>要在移动时消除缝隙，应该将图片的 <strong>Pixels per Unit</strong> 指定为 <strong>1</strong>。也就是一个像素对应场景里一个度量单位。</p>
+<p>这样我们在代码里通过对 x/y 取整，就可以很容易实现 Pixel Perfect 的显示。</p>
+<p>示例代码：</p>
+<figure class="highlight csharp"><table><tr><td class="code"><pre><div class="line">transform.position = <span class="keyword">new</span> Vector3 (Mathf.Round (x), Mathf.Round (y), <span class="number">0</span>);</div></pre></td></tr></table></figure>
+<h2 id="扩展图像边缘"><a href="#扩展图像边缘" class="headerlink" title="扩展图像边缘"></a>扩展图像边缘</h2><p>如果对 Tilemap 进行缩放，哪怕 x/y 已经取整，显示时还是可能出现缝隙，此时就必须对图片进行处理了。</p>
+<p>我们将原始的图片边缘进行扩展，这样在多个 Sprite 拼接为 Tilemap 时，由于有互相重叠的像素，就不会再有缝隙了。</p>
+<img src="/2017/05/08/fix-unity-tilemap-gap/extrude-image.png" alt="extrude-image.png" title="">
+<p>这个事情当然可以让美术在制作图片时就考虑好此问题。如果是已经做好的图片，可以用简单的 Python 脚本来扩展：</p>
+<figure class="highlight python"><table><tr><td class="code"><pre><div class="line"><span class="keyword">from</span> PIL <span class="keyword">import</span> Image <span class="keyword">as</span> PIL_Image</div><div class="line"></div><div class="line">extrude_width = <span class="number">1</span></div><div class="line"></div><div class="line"><span class="comment"># open origin image</span></div><div class="line">image = PIL_Image.open(<span class="string">'origin.png'</span>)</div><div class="line">w = image.size[<span class="number">0</span>]</div><div class="line">h = image.size[<span class="number">1</span>]</div><div class="line"></div><div class="line"><span class="comment"># left_top</span></div><div class="line">left_top_point = image.crop((<span class="number">0</span>, <span class="number">0</span>, <span class="number">1</span>, <span class="number">1</span>))</div><div class="line"><span class="comment"># right_top</span></div><div class="line">right_top_point = image.crop((w - <span class="number">1</span>, <span class="number">0</span>, w, <span class="number">1</span>))</div><div class="line"><span class="comment"># right_bottom</span></div><div class="line">right_bottom_point = image.crop((w - <span class="number">1</span>, h - <span class="number">1</span>, w, h))</div><div class="line"><span class="comment"># left_bottom</span></div><div class="line">left_bottom_point = image.crop((<span class="number">0</span>, h - <span class="number">1</span>, <span class="number">1</span>, h))</div><div class="line"><span class="comment"># top</span></div><div class="line">top_edge = image.crop((<span class="number">0</span>, <span class="number">0</span>, w, <span class="number">1</span>))</div><div class="line"><span class="comment"># bottom</span></div><div class="line">bottom_edge = image.crop((<span class="number">0</span>, h - <span class="number">1</span>, w, h))</div><div class="line"><span class="comment"># left</span></div><div class="line">left_edge = image.crop((<span class="number">0</span>, <span class="number">0</span>, <span class="number">1</span>, h))</div><div class="line"><span class="comment"># right</span></div><div class="line">right_edge = image.crop((w - <span class="number">1</span>, <span class="number">0</span>, w, h))</div><div class="line"></div><div class="line"><span class="comment"># new image</span></div><div class="line">nw = w + extrude_width * <span class="number">2</span></div><div class="line">nh = h + extrude_width * <span class="number">2</span></div><div class="line">newsize = (nw, nh)</div><div class="line">newimage = PIL_Image.new(<span class="string">"RGBA"</span>, newsize)</div><div class="line"></div><div class="line"></div><div class="line"><span class="keyword">for</span> i <span class="keyword">in</span> range(<span class="number">0</span>, extrude_width):</div><div class="line">    newimage.paste(top_edge, (extrude_width, i))</div><div class="line">    newimage.paste(left_edge, (i, extrude_width))</div><div class="line">    newimage.paste(right_edge, (nw - i - <span class="number">1</span>, extrude_width))</div><div class="line">    newimage.paste(bottom_edge, (extrude_width, nh - i - <span class="number">1</span>))</div><div class="line">    <span class="keyword">for</span> j <span class="keyword">in</span> range(<span class="number">0</span>, extrude_width):</div><div class="line">        newimage.paste(left_top_point, (i, j))</div><div class="line">        newimage.paste(right_top_point, (nw - i - <span class="number">1</span>, j))</div><div class="line">        newimage.paste(right_bottom_point, (nw - i - <span class="number">1</span>, nh - j - <span class="number">1</span>))</div><div class="line">        newimage.paste(left_bottom_point, (i, nh - j - <span class="number">1</span>))</div><div class="line"></div><div class="line"><span class="comment"># copy center</span></div><div class="line">newimage.paste(image, (extrude_width, extrude_width))</div><div class="line"></div><div class="line"><span class="comment"># save new image</span></div><div class="line">newimage.save(<span class="string">'newimage.png'</span>)</div></pre></td></tr></table></figure>
+<p>这个脚本里改变 <code>extrude_width</code> 就可以指定要扩展多少个像素，通常四周各扩展一个像素就够用了。</p>
+<blockquote>
+<p>这个脚本依赖 <strong>Pillow</strong> 库，所以先得用 <code>easy_setup</code> 或者 <code>pip</code> 把 <strong>Pillow</strong> 库装上。</p>
+</blockquote>
+<p>经过上述处理，Tilemap 看上去就没有任何缝隙了。</p>
+<img src="/2017/05/08/fix-unity-tilemap-gap/final-map.png" alt="final-map.png" title="">
 <p>-EOF-</p>
 ]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;最近在使用 Unity 开发一个独立游戏，游戏里用到了 Tilemap。但却遇到一个让人很郁闷的问题，就是拼接的地图总是有随机出现的缝隙。&lt;/p&gt;
+&lt;img src=&quot;/2017/05/08/fix-unity-tilemap-gap/01.png&quot; alt=&quot;01.png&quot; title=&quot;&quot;&gt;
+&lt;p&gt;经过网络搜索和自己摸索，总结了几条解决此问题的技巧。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;这里有一点要提醒：因为我的游戏是像素风，所以修改下面两项设置可以获得很好的效果。如果是非像素风的游戏，那不应该修改下面两项设置，而是应该直接按照本文最后的方法对图片进行边缘扩展。&lt;/p&gt;
+&lt;/blockquote&gt;
+    
+    </summary>
+    
+      <category term="tips" scheme="http://liaoyulei.cn/categories/tips/"/>
+    
+    
+      <category term="unity" scheme="http://liaoyulei.cn/tags/unity/"/>
+    
   </entry>
   
   <entry>
-    <title type="html"><![CDATA[cocos2d-x 2.0 自适应多种分辨率]]></title>
-    <link href="http://dualface.github.com/blog/2012/08/17/cocos2d-x-2-dot-0-multi-resolution/"/>
-    <updated>2012-08-17T23:17:00+08:00</updated>
-    <id>http://dualface.github.com/blog/2012/08/17/cocos2d-x-2-dot-0-multi-resolution</id>
-    <content type="html"><![CDATA[<p>cocos2d-x 2.0 提供一个极有价值的新特征: setDesignResolutionSize() 。</p>
-
-<p>这个函数用于指定一个 OpenGL 视图，然后将这个视图映射到设备屏幕上。根据不同的设定，视图会自动缩放显示内容，为 cocos2d-x 自适应多种分辨率提供了基本支持。</p>
-
-<!--more-->
-
-
-<p>不过要真正实现自适应分辨率，从场景设计、美术制作到程序编写，都需要遵循一套规范，才能极大减少工作量。</p>
-
-<blockquote><p>注意：本文假定游戏是横向显示的。</p></blockquote>
-
-
-<p>~</p>
-
-<h2>明确自适应多种分辨率的需求</h2>
-
-<p>要让游戏在不同分辨率下都获得良好的用户体验，应该满足这几个要求：</p>
-
+    <title>Game Networking</title>
+    <link href="http://liaoyulei.cn/2017/03/14/game-networking/"/>
+    <id>http://liaoyulei.cn/2017/03/14/game-networking/</id>
+    <published>2017-03-14T03:09:26.000Z</published>
+    <updated>2017-03-17T12:46:48.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>最近一直在学习网络游戏有关的内容。无意中发现一个极好的系列文章，由浅入深的讲解了网络游戏的很多基础知识和具体实现。</p>
+<p>这个系列文章原文发表在作者的个人网站上 <a href="http://gafferongames.com/networking-for-game-programmers/" target="_blank" rel="external">http://gafferongames.com/networking-for-game-programmers/</a> 。作者 Glenn Fiedler 在网络游戏领域是一位公认的专家，在游戏行业具有超过 15 年的经验。</p>
+<p>由于精力有限，我不可能全文翻译这个系列文章。所以我只选择一些重点来说明，相当于原文的读书笔记。</p>
+<p>这个系列文章分为几个部分：</p>
 <ul>
-<li>背景图填满整个画面，不出现黑边；</li>
-<li>背景图的主要内容都显示在屏幕上，尽可能少的裁剪图片（减少超出屏幕可视区域的部分）；</li>
-<li>如果背景图需要放大，尽可能减小放大的比例，避免放大后出现明显的模糊；</li>
-<li>用户界面的文字标签、按钮在任何分辨率下都应该完整显示，并且容易交互。</li>
+<li>UDP 和 TCP 传输协议的区别，以及为什么应该选择 UDP</li>
+<li>如何在 UDP 之上实现自己的游戏通讯协议</li>
+<li>一些和网络游戏有关的扩展内容，例如浮点数的确定性和状态同步等</li>
 </ul>
-
-
-<p>上述需求实际上可以分解为两部分：</p>
-
+<p>我按照自己的理解重新组织了一下文章的顺序，并介绍了每篇文章的重点。</p>
+<a id="more"></a>
+<p>~</p>
+<h2 id="为什么应该选择-UDP"><a href="#为什么应该选择-UDP" class="headerlink" title="为什么应该选择 UDP"></a>为什么应该选择 UDP</h2><p>文章 <a href="http://gafferongames.com/networking-for-game-programmers/udp-vs-tcp/" target="_blank" rel="external">UDP vs. TCP</a> 详细阐述了 UDP 和 TCP 传输协议的区别，以及为什么应该在游戏里选择 UDP 作为传输协议。</p>
+<p>作者在文章里解释了 TCP/IP 的基本原理，以及 TCP 和 UDP 两种传输协议的主要区别：</p>
 <ul>
-<li>如何制作满足多种分辨率的背景图；</li>
-<li>如何定位用户界面元素（标签、按钮等）。</li>
+<li>TCP<ul>
+<li>基于连接</li>
+<li>保证数据到达和数据到达的顺序</li>
+<li>自动将数据切分为包</li>
+<li>确保数据发送速度不会超过网络连接速度（堵塞控制）</li>
+<li>容易使用，读取和写入数据就像操作一个文件</li>
 </ul>
-
-
+</li>
+<li>UDP<ul>
+<li>没有连接的概念，必须自己编码实现</li>
+<li>无法保证数据确实能够到达，也无法保证数据到达的顺序，甚至可能出现重复数据</li>
+<li>需要自己切分数据为包来发送</li>
+<li>需要自己实现堵塞控制</li>
+<li>需要自己确定数据包是否丢失，并决定是否需要重新发送</li>
+</ul>
+</li>
+</ul>
+<p>相比 UDP，TCP 的使用更简单，开发者需要操心的事情更少。但对于需要快速发送数据的网络游戏来说，UDP 却是更好的选择，为什么呢？</p>
+<p>TCP 在传输数据时，如果某个数据包没能到达接收方。TCP 会强制重新发送数据，而重新发送前会有一个等待时间，并且此时新的数据也无法发送到服务器。对于快节奏的网游来说，这种等待是个障碍。因为对于服务器或者参与游戏的其他玩家来说，通常只有最新的数据有意义。所以这种发送数据失败重试的机制反倒会阻碍客户端将最新状态发送到服务器。</p>
+<p>文章里还阐述了为什么不应该混合使用 TCP 和 UDP，以及一些基础知识。</p>
+<p>接下来作者在文章 <a href="http://gafferongames.com/networking-for-game-programmers/sending-and-receiving-packets/" target="_blank" rel="external">Sending and Receiving Packets</a> 里以简洁的代码展示了如何用 UDP 发送和接收数据包。</p>
 <p>~</p>
-
-<h2>制作适合多种分辨率的背景图</h2>
-
-<p>在开始制作背景图前，我们看看市面上各种设备（480 像素分辨率的老设备 2012 的游戏应该可以无视了）常见的像素分辨率（resolution in pixels）：</p>
-
-<table>
-<thead>
-<tr>
-<th>Device              </th>
-<th> Width  </th>
-<th> Height</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>iPad                </td>
-<td> 1024px </td>
-<td>  768px</td>
-</tr>
-<tr>
-<td>New iPad            </td>
-<td> 2048px </td>
-<td> 1536px</td>
-</tr>
-<tr>
-<td>iPhone              </td>
-<td>  960px </td>
-<td>  640px</td>
-</tr>
-<tr>
-<td>Android Phone 1     </td>
-<td>  800px </td>
-<td>  480px</td>
-</tr>
-<tr>
-<td>Android Phone 2     </td>
-<td>  854px </td>
-<td>  480px</td>
-</tr>
-<tr>
-<td>Android Phone 3     </td>
-<td> 1280px </td>
-<td>  720px</td>
-</tr>
-<tr>
-<td>Android Pad 1       </td>
-<td> 1024px </td>
-<td>  600px</td>
-</tr>
-<tr>
-<td>Android Pad 2       </td>
-<td> 1280px </td>
-<td>  800px</td>
-</tr>
-</tbody>
-</table>
-
-
-<p>经过几个游戏的实践，我们确定了几个背景图的分辨率：</p>
-
+<h2 id="实现自己的游戏通讯协议"><a href="#实现自己的游戏通讯协议" class="headerlink" title="实现自己的游戏通讯协议"></a>实现自己的游戏通讯协议</h2><p>由于 UDP 是无连接状态的，所以首先需要解决连接状态的确认问题。文章 <a href="http://www.gafferongames.com/networking-for-game-programmers/virtual-connection-over-udp" target="_blank" rel="external">Virtual Connection over UDP</a> 前面部分阐述了数据包在网络上是如何传输的，让读者明白为什么 UDP 传输时无法保证数据包到达的可靠性和到达顺序。</p>
+<p>接下来作者从最简单的 Peer-to-Peer 开始，讲解如何设计一个自己的数据包结构：</p>
 <ul>
-<li><p>2048px * 1536px</p>
-
-<p>专门针对 New iPad，设计师的原稿也是这个尺寸。</p></li>
-<li><p>960px * 720px</p>
-
-<p>这个分辨率针对 iPhone 和 iPad 设备。在 iPhone 上 1:1 显示，上下各剪裁掉 40px。而在 iPad 上按 1.067 放大显示，正好填满整个屏幕，并且用户看不到模糊。从 2048px 的原稿导出 PNG 时，按照 0.469 比例缩小正好就是 960px * 720px。</p></li>
-<li><p>854px * 480px</p>
-
-<p>市面上的 Android 手机，854px * 480px 和 800px * 480px 是最常见的两种分辨率。2048px 的原稿按照 0.417 比例缩小，然后裁减掉上下多余部分就可以得到需要的 PNG 图片。</p></li>
-<li><p>1280px * 800px</p>
-
-<p>应付高分辨率的 Android 手机和平板设备，在各种分辨率下都可以获得很好的显示效果。2048px 的原稿按照 0.625 比例缩小，然后裁减掉上下多余部分就可以得到需要的 PNG 图片。</p></li>
+<li>在数据包中插入协议标识符（protocol id），让接收方可以过滤掉无关的 UDP 数据包</li>
+<li>分析数据包的来源 IP，确定什么时候创建一个虚拟连接的内部状态</li>
+<li>利用超时来确定虚拟连接的断开</li>
 </ul>
-
-
-<p>对于美术来说，背景图都按照 2048px * 1536px 的尺寸绘制。然后用脚本配合 ImageMagick 就可以自动导出四种分辨率的背景图片。</p>
-
-<p>如果需要最大程度减小游戏的下载体积，那么可以只使用 960px * 720px 的素材。并且参考本文后面示例程序的做法，用一套素材应付各种不同的分辨率。</p>
-
-<p>唯一需要注意的问题就是：<strong>确保画面中的主要内容在各种设备上都位于屏幕的可视区域中</strong>。</p>
-
-<p>下面几个图展示 2048px 原稿在不同设备上的可视区域：</p>
-
-<p><img src="http://dualface.github.com/upload/cocos2d-x-2.0-multires/multires_01.png" alt="" /></p>
-
-<p><img src="http://dualface.github.com/upload/cocos2d-x-2.0-multires/multires_02.png" alt="" /></p>
-
-<p><img src="http://dualface.github.com/upload/cocos2d-x-2.0-multires/multires_03.png" alt="" /></p>
-
-<p><img src="http://dualface.github.com/upload/cocos2d-x-2.0-multires/multires_04.png" alt="" /></p>
-
-<p><img src="http://dualface.github.com/upload/cocos2d-x-2.0-multires/multires_05.png" alt="" /></p>
-
-<p><img src="http://dualface.github.com/upload/cocos2d-x-2.0-multires/multires_06.png" alt="" /></p>
-
-<p><img src="http://dualface.github.com/upload/cocos2d-x-2.0-multires/multires_07.png" alt="" /></p>
-
-<p>Photoshop 源文件下载地址: <a href="http://dualface.github.com/upload/cocos2d-x-2.0-multires/multires.psd">multires.psd</a></p>
-
-<p>~</p>
-
-<h2>制作适合各种分辨率的用户界面元素</h2>
-
-<p>相比背景图，界面元素的制作只需要考虑一点：<strong>必须能够放置在最小的可视区域中</strong>。如下图界面底部有一排按钮，这些按钮在各种分辨率下都能完整显示：</p>
-
-<p><img src="http://dualface.github.com/upload/cocos2d-x-2.0-multires/multires_ui01.png" alt="" /></p>
-
-<p>在导出界面元素的 PNG 图片时，仍然使用脚本文件和 ImageMagick 按照特定比例自动缩放。</p>
-
-<p>~</p>
-
-<h2>在各种分辨率的屏幕上定位界面元素</h2>
-
-<p>准备好了美术素材，接下来的挑战就是如何在不同分辨率的设备中定位界面元素。</p>
-
-<p>为了解决这个问题，我们做了大量的尝试，最终找到一种可行的解决方案，而且使用起来非常简单。</p>
-
-<h3>虚拟分辨率</h3>
-
-<p>为了简化程序的开发，我们使用一个统一的虚拟坐标系来映射设备的屏幕。经过几个产品的实践，证明将屏幕宽度设定为 960pt 是很合理的。</p>
-
-<p><strong>特别注意：在讨论虚拟坐标系时，一律使用 pt（Point）作为单位，而不是 px（Pixel）。</strong></p>
-
-<p>下面的表格整理了各种设备分辨率与 960pt 宽度虚拟分辨率的对应关系：</p>
-
-<table>
-<thead>
-<tr>
-<th>Device              </th>
-<th> Width  </th>
-<th> Height  </th>
-<th> Virtual Width </th>
-<th> Virutal Height </th>
-<th> Scale</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>iPad                </td>
-<td> 1024px </td>
-<td>  768px  </td>
-<td> 960pt         </td>
-<td> 720pt          </td>
-<td> 1.066666667</td>
-</tr>
-<tr>
-<td>New iPad            </td>
-<td> 2048px </td>
-<td> 1536px  </td>
-<td> 960pt         </td>
-<td> 720pt          </td>
-<td> 2.133333333</td>
-</tr>
-<tr>
-<td>iPhone              </td>
-<td>  960px </td>
-<td>  640px  </td>
-<td> 960pt         </td>
-<td> 640pt          </td>
-<td> 1.0</td>
-</tr>
-<tr>
-<td>Android Phone 1     </td>
-<td>  800px </td>
-<td>  480px  </td>
-<td> 960pt         </td>
-<td> 576pt          </td>
-<td> 0.833333333</td>
-</tr>
-<tr>
-<td>Android Phone 2     </td>
-<td>  854px </td>
-<td>  480px  </td>
-<td> 960pt         </td>
-<td> 540pt          </td>
-<td> 0.889583333</td>
-</tr>
-<tr>
-<td>Android Phone 3     </td>
-<td> 1280px </td>
-<td>  720px  </td>
-<td> 960pt         </td>
-<td> 540pt          </td>
-<td> 1.333333333</td>
-</tr>
-<tr>
-<td>Android Pad 1       </td>
-<td> 1024px </td>
-<td>  600px  </td>
-<td> 960pt         </td>
-<td> 562pt          </td>
-<td> 1.066666667</td>
-</tr>
-<tr>
-<td>Android Pad 2       </td>
-<td> 1280px </td>
-<td>  800px  </td>
-<td> 960pt         </td>
-<td> 600pt          </td>
-<td> 1.333333333</td>
-</tr>
-</tbody>
-</table>
-
-
-<h3>根据参考点定位界面元素</h3>
-
-<p>在游戏初始化时，引擎就会根据设备的实际分辨率，自动设定好对应的虚拟分辨率，并且确定屏幕上的几个参考点：</p>
-
-<table>
-<thead>
-<tr>
-<th>Position            </th>
-<th> Value</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>left                </td>
-<td> 0pt</td>
-</tr>
-<tr>
-<td>right               </td>
-<td> 959pt</td>
-</tr>
-<tr>
-<td>top                 </td>
-<td> 虚拟分辨率的高度 - 1</td>
-</tr>
-<tr>
-<td>bottom              </td>
-<td> 0pt</td>
-</tr>
-<tr>
-<td>center x            </td>
-<td> 480pt</td>
-</tr>
-<tr>
-<td>center y            </td>
-<td> 虚拟分辨率的高度 / 2</td>
-</tr>
-</tbody>
-</table>
-
-
-<p>有了参考点，定位界面元素就很简单了。例如一个按钮的原点（按钮图片中心点）相对于屏幕左侧 40pt，相对于屏幕底部 30pt。那么在不同分辨率的设备上，这个按钮和屏幕左下角的距离都是差不多的。</p>
-
-<p>只要确保所有界面元素都使用参考点来定位，那么就绝不会出现在设备屏幕上看不到界面元素的情况。</p>
-
-<p>~</p>
-
-<h2>示例程序</h2>
-
-<p>为了方便大家进行测试，本文的示例工程已经编译成 Windows 可执行文件。运行时可以用下列命令行启动以便测试不同分辨率：</p>
-
-<figure class='code'><figcaption><span>命令行参数</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="c"># 如果没有指定命令行参数，则默认使用 960px * 640px 的屏幕分辨率。</span>
-</span><span class='line'>multires.demo1.win32.exe 854 480
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>或者双击 test_multires.cmd 直接查看不同分辨率的运行效果。</p>
-
-<p>其他：</p>
-
+<p>然后就是 UDP 最复杂的部分了。文章 <a href="http://www.gafferongames.com/networking-for-game-programmers/reliability-and-flow-control" target="_blank" rel="external">Reliability, Ordering and Congestion Avoidance over UDP</a> 阐述使用 UDP 传输数据时如何处理可靠性、包顺序和堵塞控制。</p>
+<p>通过自己设计的数据包格式来解决可靠性、数据顺序：</p>
 <ul>
-<li>示例程序只包含按照 960px * 720px 制作的素材。</li>
-<li>示例程序可执行文件以及源代码下载：<a href="http://dualface.github.com/upload/cocos2d-x-2.0-multires/multires.demo1.win32.zip">multires.demo1.win32.zip</a></li>
+<li>在数据包中添加序列号（sequence）。发送方每次发送一个新数据包时，就增加 <code>seq</code>。接收方通过比较收到数据包的 <code>seq</code> 和记录到的最大 <code>seq</code>，就知道一个数据包是不是最新的。</li>
+<li>在数据包中添加确认序列号（acknowledge）。发送方每次发送一个数据包时，<code>ack</code> 会保存发送方收到的最新数据包的 <code>seq</code>。</li>
 </ul>
-
-
+<p>利用 <code>seq</code> 和 <code>ack</code>，发送方和接受方都可以检查收到的数据包是不是最新的，也可以知道自己发送的数据包是不是已经被发送收到。</p>
+<p>考虑到 UDP 可能丢失多个数据包，所以还需要添加 <code>ack bitfield</code> 到数据包中。通过设置  <code>unsigned int</code> 位的方式，让接收方知道上一次发送的数据包有哪些已经收到。配合超时策略，发送方就知道哪些数据包没有到达接收方，从而可以决定是否要重新发送丢失的数据包（但发送时仍然使用最新的 <code>seq</code>）。</p>
+<p>最后，文章阐述了一种简单的度量方法。利用发送 <code>seq</code> 和收到相同 <code>ack</code> 之间的时间差来计算网络的速率。并在速率下降时，降低发送的频率，而在速率正常后恢复到正常的发送频率。</p>
+<p>整篇文章利用一些简单的机制，实现了一个初步的解决方案。虽然离实际应用还有不少距离，但对于理解和学习却非常有价值。</p>
+<p>要完整学习如何设计网络游戏的数据协议，可以阅读系列文章 <a href="http://gafferongames.com/building-a-game-network-protocol/" target="_blank" rel="external">Building a Game Network Protocol</a> 。</p>
 <p>~</p>
-
-<h2>补充说明</h2>
-
-<p>本文前面描述了如何创建适合不同分辨率的图片，但最后的示例程序并没有考虑这一点，而是用一套素材就搞定了多种分辨率。实际上，我个人推荐使用一套素材适应多种分辨率，最多再为 New iPad 单独准备一套素材，这样可以显著减少工作量。</p>
-
-<p>如果一定要按照不同分辨率使用不同的素材，那么在显示图片时需要调用 setScale() 调整图片的缩放比例。这样做的原因是 setDesignResolutionSize() 设置虚拟分辨率后，会指定一个全局的缩放比例，所有的图片即便是 scale = 100%，也会自动缩放。所以当图片尺寸和虚拟分辨率不一致时，我们就需要手动调整图片缩放比例了。</p>
-
-<p>假设设备分辨率是 1280px * 720px，虚拟分辨率是 960pt * 540pt，背景图是 1280px * 800px。要确保背景图 1:1 显示在屏幕上，参考如下代码：</p>
-
-<figure class='code'><figcaption><span>让图片按 1:1 显示在屏幕上</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-</pre></td><td class='code'><pre><code class='cpp'><span class='line'><span class="k">const</span> <span class="n">CCSize</span><span class="o">&amp;</span> <span class="n">winSize</span> <span class="o">=</span> <span class="n">CCDirector</span><span class="o">::</span><span class="n">sharedDirector</span><span class="p">()</span><span class="o">-&gt;</span><span class="n">getWinSize</span><span class="p">();</span>
-</span><span class='line'><span class="kt">float</span> <span class="n">scale</span> <span class="o">=</span> <span class="n">CCEGLView</span><span class="o">::</span><span class="n">sharedOpenGLView</span><span class="p">().</span><span class="n">getScaleX</span><span class="p">();</span>
-</span><span class='line'><span class="n">CCSprite</span><span class="o">*</span> <span class="n">bg</span> <span class="o">=</span> <span class="n">CCSprite</span><span class="o">::</span><span class="n">create</span><span class="p">(</span><span class="s">&quot;bg.jpg&quot;</span><span class="p">)</span>
-</span><span class='line'><span class="n">bg</span><span class="o">-&gt;</span><span class="n">setPosition</span><span class="p">(</span><span class="n">ccp</span><span class="p">(</span><span class="n">winSize</span><span class="p">.</span><span class="n">width</span> <span class="o">/</span> <span class="mi">2</span><span class="p">,</span> <span class="n">winSize</span><span class="p">.</span><span class="n">height</span> <span class="o">/</span> <span class="mi">2</span><span class="p">));</span>
-</span><span class='line'><span class="n">bg</span><span class="o">-&gt;</span><span class="n">setScale</span><span class="p">(</span><span class="mf">1.0f</span> <span class="o">/</span> <span class="n">scale</span><span class="p">);</span> <span class="c1">// 这里重置图片缩放比例，确保图片按 1:1 显示在屏幕上</span>
-</span><span class='line'><span class="n">addChild</span><span class="p">(</span><span class="n">bg</span><span class="p">);</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
+<h2 id="和网络游戏有关的扩展内容"><a href="#和网络游戏有关的扩展内容" class="headerlink" title="和网络游戏有关的扩展内容"></a>和网络游戏有关的扩展内容</h2><p>网络游戏的调试是个很复杂的问题。文章 <a href="http://www.gafferongames.com/networking-for-game-programmers/debugging-multiplayer-games" target="_blank" rel="external">Debugging Multiplayer Games</a> 里告诉你很多游戏集成多人玩法之所以失败是因为团队抱着 <strong>focus on the singleplayer experience</strong> 的错误想法来做，所以在需要集成多人玩法时就懵逼了。作者以他多年的经验告诉我们：<strong>debugging multiplayer games is hard</strong>。最后，看起来作者开了一个新坑，不过这个新的系列还没任何内容。</p>
+<p><a href="http://www.gafferongames.com/networking-for-game-programmers/floating-point-determinism" target="_blank" rel="external">Floating Point Determinism</a> 这篇文章也是我过去曾经反复探寻过的一个问题，如何在不同平台间保证浮点数的确定性。</p>
+<p>当时我想做一个 1v1 的双人对战物理游戏。很显然，不可能让两个玩家互相发送所有物理世界的数据，只能是发送玩家的操作和时间等数据，然后在两个客户端里分别模拟物理效果。但我在网上找了一大圈，没找到合适的解决方案，最后放弃了这个游戏的想法。</p>
+<p>由于物理引擎依赖于大量的浮点计算，所以这个问题是实现网络物理游戏的关键。这篇文章，作者也没提出具体的解决方案，但他提供了大量他搜集和整理的资料供我们参考。</p>
+<p>总结而言，跨平台的网络物理游戏，需要考虑处理器（AMD、Intel、ARM）、编译器，第三方库等各种问题，才能保证在不同平台（客户端和服务端肯定是不同平台）之间的浮点数确定性。</p>
 <p>~</p>
-
+<p>最后一篇，<a href="http://www.gafferongames.com/networking-for-game-programmers/what-every-programmer-needs-to-know-about-game-networking" target="_blank" rel="external">What Every Programmer Needs To Know About Game Networking</a> 介绍了一些网络游戏常用的同步策略，以及优化用户体验的方法。</p>
+<p>文章里提到了两种基本的策略：</p>
+<ul>
+<li><p>Lockstep：在每一次游戏状态同步期间，都同步所有玩家的状态。这样做的好处是实现简单，但坏处则是任何一个玩家和服务器之间的网络连接不好，就会导致整个游戏世界停顿。</p>
+</li>
+<li><p>Client/Server：客户端只管把自己的操作发给服务端。服务端负责更新所有玩家的状态，然后广播给所有客户端。这样做的好处是客户端相当于一个只有输入和显示的哑终端，所有状态更新操作都在服务端进行。坏处就是由于客户端和服务端之间必然存在的网络延迟，玩家会觉得自己的操作总是要慢一拍才能反映在画面上。</p>
+</li>
+</ul>
+<p>不过 Client/Server 策略结合客户端预测（Client-Side Prediction）技术，就可以很大程度上解决 Client/Server 策略的体验问题。</p>
+<p>当玩家在客户端做出操作时，对于一些确定性的操作，例如前进、转身，客户端可以立即更新画面状态。当服务端返回的数据到达客户端时，通过计算时间差和比较状态，再来决定是维持客户端已经更新的状态，还是修正客户端的状态。</p>
+<p>例如在 WOW 里，如果网速很差，我们经常会发现跑了一段路以后，却突然瞬移了一下位置。就是客户端根据服务端传回的数据对客户端状态进行了修正。</p>
+<p>这篇文章虽然没有提到具体的方法，但为我们介绍了当今主流网游采用的数据同步策略。</p>
+<p>~</p>
+<p>总的来说，这个作者不但经验丰富，更是能把复杂的问题分解为相对容易理解的小块写成文章让读者看明白。</p>
+<p>作者网站上还有大量与网络游戏相关的内容，还有一些相关的开源项目，建议对网络游戏有兴趣的同学深入发掘一下。</p>
 <p>-EOF-</p>
 ]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;最近一直在学习网络游戏有关的内容。无意中发现一个极好的系列文章，由浅入深的讲解了网络游戏的很多基础知识和具体实现。&lt;/p&gt;
+&lt;p&gt;这个系列文章原文发表在作者的个人网站上 &lt;a href=&quot;http://gafferongames.com/networking-for-game-programmers/&quot;&gt;http://gafferongames.com/networking-for-game-programmers/&lt;/a&gt; 。作者 Glenn Fiedler 在网络游戏领域是一位公认的专家，在游戏行业具有超过 15 年的经验。&lt;/p&gt;
+&lt;p&gt;由于精力有限，我不可能全文翻译这个系列文章。所以我只选择一些重点来说明，相当于原文的读书笔记。&lt;/p&gt;
+&lt;p&gt;这个系列文章分为几个部分：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;UDP 和 TCP 传输协议的区别，以及为什么应该选择 UDP&lt;/li&gt;
+&lt;li&gt;如何在 UDP 之上实现自己的游戏通讯协议&lt;/li&gt;
+&lt;li&gt;一些和网络游戏有关的扩展内容，例如浮点数的确定性和状态同步等&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;我按照自己的理解重新组织了一下文章的顺序，并介绍了每篇文章的重点。&lt;/p&gt;
+    
+    </summary>
+    
+      <category term="learn" scheme="http://liaoyulei.cn/categories/learn/"/>
+    
+    
+      <category term="network" scheme="http://liaoyulei.cn/tags/network/"/>
+    
+      <category term="server" scheme="http://liaoyulei.cn/tags/server/"/>
+    
   </entry>
   
   <entry>
-    <title type="html"><![CDATA[转到新博客，Octopress 我来啦]]></title>
-    <link href="http://dualface.github.com/blog/2012/08/05/first-octopress-post/"/>
-    <updated>2012-08-05T16:58:00+08:00</updated>
-    <id>http://dualface.github.com/blog/2012/08/05/first-octopress-post</id>
-    <content type="html"><![CDATA[<p>初步试用 Octopress，感觉很爽，尤其是下面几点：</p>
-
-<ul>
-<li>支持 Markdown 格式编写 blog：WordPress 折腾半天各种 Markdown 插件效果都不理想；</li>
-<li>支持代码高亮：WordPress 插入代码真心麻烦啊；</li>
-<li>直接放在 github.com 上，省的自己配置了：越来越厌烦 Unix/Linux 下安装配置各种软件；</li>
-<li>非常 Cool！</li>
-</ul>
-
-
-<p>好吧，希望新博客能够坚持写下去 :)</p>
+    <title>在 Github 上 fork 同一个仓库两次</title>
+    <link href="http://liaoyulei.cn/2017/01/09/fork-same-repo-twice/"/>
+    <id>http://liaoyulei.cn/2017/01/09/fork-same-repo-twice/</id>
+    <published>2017-01-09T15:10:19.000Z</published>
+    <updated>2017-01-09T15:25:23.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>在 Github.com 上，一个账号只能 fork 同一个仓库一次。除非删除了之前 fork 的仓库，否则是没法打断这种 fork 联系的。</p>
+<p>今天想了个办法解决此问题。</p>
+<a id="more"></a>
+<ol>
+<li>注册一个新的 github.com 账号，fork 目标仓库。</li>
+<li>将以前的 github.com 账号添加到该仓库的 Collaborators 中。</li>
+<li>用以前的 github.com 账号来 clone 新 fork 的仓库。</li>
+</ol>
+<p>这样做的好处是可以继续用以前的 github.com 账号来提交。新的 github 账号仅仅用于 fork 操作。</p>
+<p>简单粗暴！</p>
+<p>-EOF-</p>
 ]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;在 Github.com 上，一个账号只能 fork 同一个仓库一次。除非删除了之前 fork 的仓库，否则是没法打断这种 fork 联系的。&lt;/p&gt;
+&lt;p&gt;今天想了个办法解决此问题。&lt;/p&gt;
+    
+    </summary>
+    
+      <category term="tips" scheme="http://liaoyulei.cn/categories/tips/"/>
+    
+    
+      <category term="git" scheme="http://liaoyulei.cn/tags/git/"/>
+    
+      <category term="github" scheme="http://liaoyulei.cn/tags/github/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>第一个 Netty 应用</title>
+    <link href="http://liaoyulei.cn/2017/01/04/first-netty-app/"/>
+    <id>http://liaoyulei.cn/2017/01/04/first-netty-app/</id>
+    <published>2017-01-04T13:42:44.000Z</published>
+    <updated>2017-01-05T06:22:49.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>跟着 <strong>Netty in Action</strong> 这本书学习 Netty，结果第一个 app 搞了两天都没跑起来，主要卡在 Gradle 编译这一块了。</p>
+<p>这篇文章就详细记录了搭建开发环境和编译 Netty app 的详细步骤，免得以后又忘了。</p>
+<a id="more"></a>
+<h2 id="搭建开发环境"><a href="#搭建开发环境" class="headerlink" title="搭建开发环境"></a>搭建开发环境</h2><p>基本步骤:</p>
+<ol>
+<li><p>从 <a href="http://www.oracle.com/technetwork/java/javase/downloads/index.html" target="_blank" rel="external">http://www.oracle.com/technetwork/java/javase/downloads/index.html</a> 下载 JDK 最新版本装好。</p>
+</li>
+<li><p>访问 <a href="http://sdkman.io/install.html" target="_blank" rel="external">http://sdkman.io/install.html</a> 页面，按照步骤安装 SDKMAN，然后重启终端。</p>
+<figure class="highlight bash"><table><tr><td class="code"><pre><div class="line">curl <span class="_">-s</span> <span class="string">"https://get.sdkman.io"</span> | bash</div></pre></td></tr></table></figure>
+</li>
+<li><p>安装 Gradle。</p>
+<figure class="highlight bash"><table><tr><td class="code"><pre><div class="line">sdk install gradle</div></pre></td></tr></table></figure>
+</li>
+</ol>
+<p>以上步骤如果下载很慢，请默念“FXXK GFW”一百遍！</p>
+<h2 id="建立工程结构"><a href="#建立工程结构" class="headerlink" title="建立工程结构"></a>建立工程结构</h2><p>新建一个空白目录，在其中执行（如果这一步出错，说明 gradle 版本太老）:</p>
+<figure class="highlight bash"><table><tr><td class="code"><pre><div class="line">gradle init --type java-appliaction</div></pre></td></tr></table></figure>
+<p>执行后就得到一个基本的 java app 工程结构了。</p>
+<p>现在打开 <code>build.gradle</code>，修改依赖为:</p>
+<figure class="highlight scala"><table><tr><td class="code"><pre><div class="line">dependencies &#123;</div><div class="line">    compile <span class="symbol">'io</span>.netty:netty-microbench:<span class="number">4.1</span><span class="number">.6</span>.<span class="type">Final</span>'</div><div class="line"></div><div class="line">    <span class="comment">// Use JUnit test framework</span></div><div class="line">    testCompile <span class="symbol">'junit</span>:junit:<span class="number">4.12</span>'</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>执行:</p>
+<figure class="highlight bash"><table><tr><td class="code"><pre><div class="line">gradle run</div></pre></td></tr></table></figure>
+<p>如果一切正常，会看到执行结果 <code>Hello world.</code> 。</p>
+<h2 id="创建-Netty-Server"><a href="#创建-Netty-Server" class="headerlink" title="创建 Netty Server"></a>创建 Netty Server</h2><p>这里我们选用 <strong>Netty in Action</strong> 里第二章的 EchoServer 示例来实践。</p>
+<ol>
+<li><p>在工程目录 <code>src/main/java/</code> 中建立子目录 <code>nettyapp/</code>。</p>
+</li>
+<li><p>从 <a href="https://github.com/normanmaurer/netty-in-action" target="_blank" rel="external">https://github.com/normanmaurer/netty-in-action</a> 下载所有源代码，并解压缩。</p>
+</li>
+<li><p>将 <code>src/main/java/com/manning/nettyinaction/chapter2/</code> 中的所有文件复制到我们工程 <code>src/main/java/nettyapp/</code> 目录中。</p>
+</li>
+<li><p>删除 <code>src/main/java/App.java</code> 文件。</p>
+</li>
+<li><p>修改所有文件的 <code>package</code>:</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><div class="line"><span class="keyword">package</span> com.manning.nettyinaction.chapter2;</div></pre></td></tr></table></figure>
+<p>修改为</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><div class="line"><span class="keyword">package</span> nettyapp;</div></pre></td></tr></table></figure>
+</li>
+<li><p>修改 <code>src/main/java/nettyapp/EchoServer.java</code> 的 <code>main()</code> 方法为:</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><div class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> <span class="keyword">throws</span> Exception </span>&#123;</div><div class="line">    <span class="keyword">new</span> EchoServer(<span class="number">8080</span>).start();</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+</li>
+<li><p>修改 <code>build.gradle</code>:</p>
+<figure class="highlight scala"><table><tr><td class="code"><pre><div class="line">mainClassName = <span class="symbol">'nettyapp</span>.<span class="type">EchoServer</span>'</div></pre></td></tr></table></figure>
+</li>
+<li><p>执行:</p>
+<figure class="highlight bash"><table><tr><td class="code"><pre><div class="line">gradle run</div></pre></td></tr></table></figure>
+<p>如果显示 <code>nettyapp.EchoServer started and listen on /0:0:0:0:0:0:0:0:8080</code> 表示我们的 netty app 已经跑起来了。</p>
+</li>
+</ol>
+<p>如果需要分发编译好的 netty app，执行:</p>
+<figure class="highlight bash"><table><tr><td class="code"><pre><div class="line">gradle distZip</div></pre></td></tr></table></figure>
+<p>可以将 netty app 打包为 .zip 文件，并且包含各种环境下需要的启动脚本和支持库。</p>
+<p>-EOF-</p>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;跟着 &lt;strong&gt;Netty in Action&lt;/strong&gt; 这本书学习 Netty，结果第一个 app 搞了两天都没跑起来，主要卡在 Gradle 编译这一块了。&lt;/p&gt;
+&lt;p&gt;这篇文章就详细记录了搭建开发环境和编译 Netty app 的详细步骤，免得以后又忘了。&lt;/p&gt;
+    
+    </summary>
+    
+      <category term="guide" scheme="http://liaoyulei.cn/categories/guide/"/>
+    
+    
+      <category term="java" scheme="http://liaoyulei.cn/tags/java/"/>
+    
+      <category term="netty" scheme="http://liaoyulei.cn/tags/netty/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>为 PHP 内置 WebServer 提供目录和文件索引</title>
+    <link href="http://liaoyulei.cn/2016/12/24/php-builtin-webserver-indexfiles/"/>
+    <id>http://liaoyulei.cn/2016/12/24/php-builtin-webserver-indexfiles/</id>
+    <published>2016-12-24T13:06:46.000Z</published>
+    <updated>2016-12-24T14:09:08.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>PHP 5.x 开始提供了一个简单的内置 WebServer，方便大家在没有安装 Apache 的情况下调试 PHP 代码。</p>
+<p>要启动这个内置 WebServer 很简单，但它不能显示目录和文件索引，稍微有点不方便。本文提供了一个简单的实现。</p>
+<a id="more"></a>
+<p>使用方法：</p>
+<figure class="highlight bash"><table><tr><td class="code"><pre><div class="line">php -S localhost:8080 webindex.php</div></pre></td></tr></table></figure>
+<p>然后打开浏览器访问 <code>localhost:8080</code> 即可以当前目录为根目录，显示目录列表和文件列表，并且可以在子目录中跳转。</p>
+<p>实际运行效果：</p>
+<img src="/2016/12/24/php-builtin-webserver-indexfiles/webindex-screenshot.png" alt="webindex-screenshot.png" title="">
+<p>~</p>
+<p>参考来源：<a href="https://github.com/JBlond/php-built-in-webserver-router-script" target="_blank" rel="external">https://github.com/JBlond/php-built-in-webserver-router-script</a></p>
+<p>我编写的版本：<a href="https://gist.github.com/dualface/70b62fc30b076026d0a8c87385eedebe" target="_blank" rel="external">https://gist.github.com/dualface/70b62fc30b076026d0a8c87385eedebe</a></p>
+<figure class="highlight php"><table><tr><td class="code"><pre><div class="line"><span class="meta">&lt;?php</span></div><div class="line">date_default_timezone_set(<span class="string">'UTC'</span>);</div><div class="line"></div><div class="line"><span class="function"><span class="keyword">function</span> <span class="title">getfilesize</span><span class="params">($path)</span> </span>&#123;</div><div class="line">    $size = ceil(filesize($path)) . <span class="string">''</span>;</div><div class="line">    <span class="keyword">return</span> str_repeat(<span class="string">' '</span>, <span class="number">8</span> - strlen($size)) . $size . <span class="string">' KB'</span>;</div><div class="line">&#125;</div><div class="line"></div><div class="line"><span class="function"><span class="keyword">function</span> <span class="title">printlog</span><span class="params">($status = <span class="number">200</span>)</span> </span>&#123;</div><div class="line">    $time = date(<span class="string">'D M j H:i:s Y'</span>);</div><div class="line">    $addr = $_SERVER[<span class="string">'REMOTE_ADDR'</span>];</div><div class="line">    $port = $_SERVER[<span class="string">'REMOTE_PORT'</span>];</div><div class="line">    $uri = $_SERVER[<span class="string">'REQUEST_URI'</span>];</div><div class="line">    $log = sprintf(<span class="string">"[%s] %s:%s [%s]: %s\n"</span>, $time, $addr, $port, $status, $uri);</div><div class="line">    file_put_contents(<span class="string">'php://stdout'</span>, $log);</div><div class="line">&#125;</div><div class="line"></div><div class="line"><span class="function"><span class="keyword">function</span> <span class="title">echo_h</span><span class="params">($t)</span> </span>&#123;</div><div class="line">    <span class="keyword">echo</span> htmlspecialchars($t);</div><div class="line">&#125;</div><div class="line"></div><div class="line"><span class="function"><span class="keyword">function</span> <span class="title">dumpfile</span><span class="params">($path)</span> </span>&#123;</div><div class="line">    $name = htmlspecialchars(pathinfo($path, PATHINFO_BASENAME));</div><div class="line">    <span class="keyword">echo</span> <span class="string">&lt;&lt;&lt;EOT</span></div><div class="line">&lt;!DOCTYPE html&gt;</div><div class="line">&lt;html&gt;</div><div class="line">&lt;head&gt;</div><div class="line">&lt;title&gt;<span class="subst">&#123;$name&#125;</span>&lt;/title&gt;</div><div class="line">&lt;meta charset="utf-8" /&gt;</div><div class="line">&lt;style&gt;</div><div class="line">pre &#123;</div><div class="line">    font-size: 14px;</div><div class="line">    width: 80em;</div><div class="line">    white-space: pre-wrap;</div><div class="line">    white-space: -moz-pre-wrap;</div><div class="line">    white-space: -pre-wrap;</div><div class="line">    white-space: -o-pre-wrap;</div><div class="line">    word-wrap: break-word;</div><div class="line">&#125;</div><div class="line">&lt;/style&gt;</div><div class="line">&lt;/head&gt;</div><div class="line">&lt;body&gt;</div><div class="line">&lt;pre&gt;</div><div class="line">EOT;</div><div class="line"></div><div class="line">echo_h(file_get_contents($path));</div><div class="line"></div><div class="line"><span class="keyword">echo</span> <span class="string">&lt;&lt;&lt;EOT</span></div><div class="line">&lt;/pre&gt;</div><div class="line">&lt;/body&gt;</div><div class="line">&lt;/html&gt;</div><div class="line"></div><div class="line">EOT;</div><div class="line"></div><div class="line">&#125;</div><div class="line"></div><div class="line"><span class="comment">// start</span></div><div class="line"></div><div class="line">$uri = parse_url($_SERVER[<span class="string">'REQUEST_URI'</span>], PHP_URL_PATH);</div><div class="line">$path = $_SERVER[<span class="string">'DOCUMENT_ROOT'</span>] . $uri;</div><div class="line"><span class="keyword">if</span> (!file_exists($path)) &#123;</div><div class="line">    printlog(<span class="number">404</span>);</div><div class="line">    http_response_code(<span class="number">404</span>);</div><div class="line">    <span class="keyword">return</span> <span class="keyword">false</span>;</div><div class="line">&#125;</div><div class="line"></div><div class="line">$dump_exts = <span class="keyword">array</span>(</div><div class="line">    <span class="string">'txt'</span>, <span class="string">'text'</span>, <span class="string">'md'</span>, <span class="string">'mdown'</span>, <span class="string">'markdown'</span>, <span class="string">'json'</span>,</div><div class="line">    <span class="string">'c'</span>, <span class="string">'cpp'</span>, <span class="string">'h'</span>, <span class="string">'hpp'</span>, <span class="string">'m'</span>, <span class="string">'mm'</span>, <span class="string">'lua'</span>, <span class="string">'py'</span></div><div class="line">);</div><div class="line"><span class="keyword">if</span> (!is_dir($path)) &#123;</div><div class="line">    $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));</div><div class="line">    <span class="keyword">if</span> ($ext == <span class="string">''</span> || in_array($ext, $dump_exts)) &#123;</div><div class="line">        printlog();</div><div class="line">        dumpfile($path);</div><div class="line">        <span class="keyword">return</span> <span class="keyword">true</span>;</div><div class="line">    &#125; <span class="keyword">else</span> &#123;</div><div class="line">        <span class="comment">// let server handle file</span></div><div class="line">        <span class="keyword">return</span> <span class="keyword">false</span>;</div><div class="line">    &#125;</div><div class="line">&#125;</div><div class="line"></div><div class="line">$this_dir = substr($_SERVER[<span class="string">'PHP_SELF'</span>], <span class="number">0</span>, strrpos($_SERVER[<span class="string">'PHP_SELF'</span>], <span class="string">'/'</span>) + <span class="number">1</span>);</div><div class="line">$dir = $_SERVER[<span class="string">'DOCUMENT_ROOT'</span>] . $this_dir;</div><div class="line"><span class="keyword">if</span> (!is_dir($dir)) &#123;</div><div class="line">    printlog(<span class="number">404</span>);</div><div class="line">    http_response_code(<span class="number">404</span>);</div><div class="line">    <span class="keyword">return</span> <span class="keyword">false</span>;</div><div class="line">&#125;</div><div class="line"></div><div class="line">$folder = opendir($dir);</div><div class="line"><span class="keyword">if</span> (!readdir($folder)) &#123;</div><div class="line">    printlog(<span class="number">404</span>);</div><div class="line">    http_response_code(<span class="number">404</span>);</div><div class="line">    <span class="keyword">return</span> <span class="keyword">false</span>;</div><div class="line">&#125;</div><div class="line"></div><div class="line">$files = <span class="keyword">array</span>();</div><div class="line"><span class="keyword">while</span> ($file = readdir($folder)) &#123;</div><div class="line">    $base = $this_dir == <span class="string">'/'</span> ? <span class="string">''</span> : $this_dir;</div><div class="line">    $ext = pathinfo($file, PATHINFO_EXTENSION);</div><div class="line">    $path = $dir . DIRECTORY_SEPARATOR . $file;</div><div class="line">    $filesize = getfilesize($path);</div><div class="line">    $time = date(<span class="string">'d-M-Y H:i:s'</span>, filemtime($path));</div><div class="line">    $is_dir = is_dir($path);</div><div class="line"></div><div class="line">    <span class="keyword">if</span> (substr($file, <span class="number">0</span>, <span class="number">1</span>) == <span class="string">'.'</span>) <span class="keyword">continue</span>;</div><div class="line"></div><div class="line">    $files[] = <span class="keyword">array</span>(</div><div class="line">        <span class="string">'name'</span> =&gt; $is_dir ? $file . <span class="string">'/'</span> : $file,</div><div class="line">        <span class="string">'ext'</span> =&gt; $ext,</div><div class="line">        <span class="string">'size'</span> =&gt; $filesize,</div><div class="line">        <span class="string">'time'</span> =&gt; $time,</div><div class="line">        <span class="string">'is_dir'</span> =&gt; $is_dir</div><div class="line">    );</div><div class="line">&#125;</div><div class="line"></div><div class="line">usort($files, <span class="function"><span class="keyword">function</span><span class="params">($a, $b)</span> </span>&#123;</div><div class="line">    <span class="keyword">if</span> ($a[<span class="string">'is_dir'</span>]) &#123;</div><div class="line">        <span class="keyword">if</span> ($b[<span class="string">'is_dir'</span>]) &#123;</div><div class="line">            <span class="keyword">return</span> $a[<span class="string">'name'</span>] &lt; $b[<span class="string">'name'</span>] ? <span class="number">-1</span> : <span class="number">1</span>;</div><div class="line">        &#125; <span class="keyword">else</span> &#123;</div><div class="line">            <span class="keyword">return</span> <span class="number">-1</span>;</div><div class="line">        &#125;</div><div class="line">    &#125;</div><div class="line"></div><div class="line">    <span class="keyword">if</span> ($b[<span class="string">'is_dir'</span>]) &#123;</div><div class="line">        <span class="keyword">return</span> <span class="number">1</span>;</div><div class="line">    &#125;</div><div class="line"></div><div class="line">    <span class="keyword">return</span> $a[<span class="string">'name'</span>] &lt; $b[<span class="string">'name'</span>] ? <span class="number">-1</span> : <span class="number">1</span>;</div><div class="line">&#125;);</div><div class="line"></div><div class="line">$name_len = <span class="number">50</span>;</div><div class="line"></div><div class="line"><span class="meta">?&gt;</span></div><div class="line">&lt;!DOCTYPE html&gt;</div><div class="line">&lt;html&gt;</div><div class="line">&lt;head&gt;</div><div class="line">&lt;title&gt;<span class="meta">&lt;?php</span> echo_h($this_dir); <span class="meta">?&gt;</span>&lt;/title&gt;</div><div class="line">&lt;meta charset=<span class="string">"utf-8"</span> /&gt;</div><div class="line">&lt;/head&gt;</div><div class="line">&lt;body&gt;</div><div class="line"></div><div class="line">&lt;h1&gt;Index of <span class="meta">&lt;?php</span> echo_h($this_dir); <span class="meta">?&gt;</span>&lt;/h1&gt;</div><div class="line"></div><div class="line">&lt;pre&gt;</div><div class="line">    Last modified               Size  Name</div><div class="line">&lt;hr /&gt;<span class="meta">&lt;?php</span> <span class="keyword">if</span> ($this_dir != <span class="string">'/'</span>): <span class="meta">?&gt;</span></div><div class="line">[D] &lt;a href=<span class="string">".."</span>&gt;<span class="keyword">Parent</span> Directory&lt;/a&gt;</div><div class="line"><span class="meta">&lt;?php</span></div><div class="line"><span class="keyword">endif</span>;</div><div class="line"><span class="keyword">foreach</span> ($files <span class="keyword">as</span> $file):</div><div class="line">    $dirflag = $file[<span class="string">'is_dir'</span>] ? <span class="string">'[D]'</span> : <span class="string">'   '</span>;</div><div class="line">    $prefix = sprintf(<span class="string">'%s %s %s'</span>, $dirflag, $file[<span class="string">'time'</span>], $file[<span class="string">'size'</span>]);</div><div class="line">    $name = $file[<span class="string">'name'</span>];</div><div class="line"><span class="meta">?&gt;</span></div><div class="line"><span class="meta">&lt;?php</span> <span class="keyword">echo</span> $prefix; <span class="meta">?&gt;</span>  &lt;a href=<span class="string">"&lt;?php echo_h($name); ?&gt;"</span>&gt;<span class="meta">&lt;?php</span> echo_h($name); <span class="meta">?&gt;</span>&lt;/a&gt;</div><div class="line"><span class="meta">&lt;?php</span> <span class="keyword">endforeach</span>; <span class="meta">?&gt;</span></div><div class="line">&lt;/pre&gt;</div><div class="line"></div><div class="line">&lt;/body&gt;</div><div class="line">&lt;/html&gt;</div></pre></td></tr></table></figure>
+<p>-EOF-</p>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;PHP 5.x 开始提供了一个简单的内置 WebServer，方便大家在没有安装 Apache 的情况下调试 PHP 代码。&lt;/p&gt;
+&lt;p&gt;要启动这个内置 WebServer 很简单，但它不能显示目录和文件索引，稍微有点不方便。本文提供了一个简单的实现。&lt;/p&gt;
+    
+    </summary>
+    
+      <category term="tips" scheme="http://liaoyulei.cn/categories/tips/"/>
+    
+    
+      <category term="php" scheme="http://liaoyulei.cn/tags/php/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>用 PHP 创建中文 PDF 的最简单方法</title>
+    <link href="http://liaoyulei.cn/2016/12/24/create-chinese-pdf/"/>
+    <id>http://liaoyulei.cn/2016/12/24/create-chinese-pdf/</id>
+    <published>2016-12-24T06:25:05.000Z</published>
+    <updated>2016-12-24T07:40:34.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>最近需要用 PHP 创建包含中文的 PDF，网上搜了不少资料，都提到需要自己创建字体等步骤。但经过我试验，其实利用 TCPDF 及其自带的字体定义文件，创建包含中文的 PDF 可以说易如反掌。</p>
+<a id="more"></a>
+<p>首先下载最新版本的 TCPDF，下载地址：<a href="https://github.com/tecnickcom/TCPDF/releases" target="_blank" rel="external">https://github.com/tecnickcom/TCPDF/releases</a> 。</p>
+<p>然后创建一个新的 <code>create-pdf.php</code> 文件，输入以下代码：</p>
+<figure class="highlight php"><table><tr><td class="code"><pre><div class="line"><span class="meta">&lt;?php</span></div><div class="line"><span class="comment">// filename: create-pdf.php</span></div><div class="line"></div><div class="line"><span class="comment">// 设置 PHP 脚本的执行时的内存限制为 256M，因为中文字体的定义需要消耗大量内存</span></div><div class="line">ini_set(<span class="string">'memory_limit'</span>, <span class="string">'256M'</span>);</div><div class="line"></div><div class="line"><span class="comment">// 设置默认时区</span></div><div class="line">date_default_timezone_set(<span class="string">'Asia/Shanghai'</span>);</div><div class="line"></div><div class="line"><span class="comment">// 载入 TCPDF 库</span></div><div class="line"><span class="keyword">require</span> (<span class="string">'tcpdf.php'</span>);</div><div class="line"></div><div class="line"><span class="comment">// 创建一个新 PDF 文档</span></div><div class="line">$pdf = <span class="keyword">new</span> TCPDF(<span class="string">'Portrait'</span>, <span class="string">'mm'</span>, <span class="string">'A4'</span>, <span class="keyword">true</span>, <span class="string">'UTF-8'</span>);</div><div class="line"><span class="comment">// 添加页面</span></div><div class="line">$pdf-&gt;AddPage();</div><div class="line"><span class="comment">// 设置字体为 TCPDF 内置的 cid0cs，也就是 CID-0 Chinese Simplified</span></div><div class="line">$pdf-&gt;SetFont(<span class="string">'cid0cs'</span>, <span class="string">''</span>, <span class="number">14</span>);</div><div class="line"></div><div class="line"><span class="comment">// 定义要输出的内容</span></div><div class="line">$html = <span class="string">&lt;&lt;&lt;TEXT</span></div><div class="line"></div><div class="line">&lt;h1&gt;Welcome to  &lt;a href="http://www.tcpdf.org" style="text-decoration:none;background-color:#CC0000;color:black;"&gt;&amp;nbsp;&lt;span style="color:black;"&gt;TC&lt;/span&gt;&lt;span style="color:white;"&gt;PDF&lt;/span&gt;&amp;nbsp;&lt;/a&gt;!&lt;/h1&gt;</div><div class="line"></div><div class="line">&lt;p&gt;就像西文 typography 中已经相对成熟的 kerning，中文也需要同样的东西。很自然地，中文字符与西文字符交替出现的时候，也需要合适的 kerning。然而问题是目前的计算机字体，在这方面的设计很差。在网页的文本中，利用手工添加空格的方式，一定程度上，可以起到调整中英文字偶之间的空隙，然而这终究是个临时的「折衷」办法。类似的「空格折衷」，在机械打字机普及的时代，有更多例子。&lt;/p&gt;</div><div class="line"></div><div class="line"></div><div class="line">&lt;backquote&gt;</div><div class="line">以上内容来自：&lt;a href="https://www.zhihu.com/question/19587406"&gt;https://www.zhihu.com/question/19587406&lt;/a&gt;</div><div class="line">&lt;/backquote&gt;</div><div class="line"></div><div class="line">&lt;p&gt;This text is printed using the &lt;i&gt;writeHTMLCell()&lt;/i&gt; method but you can also use: &lt;i&gt;Multicell(), writeHTML(), Write(), Cell() and Text()&lt;/i&gt;.&lt;/p&gt;</div><div class="line"></div><div class="line">&lt;p&gt;Please check the source code documentation and other examples for further information.&lt;/p&gt;</div><div class="line"></div><div class="line">&lt;p style="color:#CC0000;"&gt;TO IMPROVE AND EXPAND TCPDF I NEED YOUR SUPPORT, PLEASE &lt;a href="http://sourceforge.net/donate/index.php?group_id=128076"&gt;MAKE A DONATION!&lt;/a&gt;&lt;/p&gt;</div><div class="line"></div><div class="line">TEXT;</div><div class="line"></div><div class="line"><span class="comment">// 以 HTML 方式输出内容</span></div><div class="line">$pdf-&gt;writeHTMLCell(<span class="number">0</span>, <span class="number">0</span>, <span class="string">''</span>, <span class="string">''</span>, $html, <span class="number">0</span>, <span class="number">1</span>, <span class="number">0</span>, <span class="keyword">true</span>, <span class="string">''</span>, <span class="keyword">true</span>);</div><div class="line"></div><div class="line"><span class="comment">// 将输出结果为与 .php 文件同目录的 example_001.pdf</span></div><div class="line">$pdf-&gt;Output(<span class="keyword">__DIR__</span> . <span class="string">'/example_001.pdf'</span>, <span class="string">'F'</span>);</div></pre></td></tr></table></figure>
+<p>在命令行中执行：</p>
+<figure class="highlight bash"><table><tr><td class="code"><pre><div class="line">$ php create-pdf.php</div></pre></td></tr></table></figure>
+<p>上面的代码就可以输出漂亮的中英文混排 PDF 了。</p>
+<img src="/2016/12/24/create-chinese-pdf/example_001.png" alt="example_001.png" title="">
+<p>当然，这个方法也有缺点：</p>
+<ul>
+<li>在没有中文字体的系统里无法显示中文</li>
+<li>中文字体会使用系统的默认中文字体，所以在不同系统里看上去会有一点差异</li>
+<li>只有一种中文字体</li>
+</ul>
+<p>但是，这个方法最大的好处不就是“简单”吗！</p>
+<p>-EOF-</p>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;最近需要用 PHP 创建包含中文的 PDF，网上搜了不少资料，都提到需要自己创建字体等步骤。但经过我试验，其实利用 TCPDF 及其自带的字体定义文件，创建包含中文的 PDF 可以说易如反掌。&lt;/p&gt;
+    
+    </summary>
+    
+      <category term="tips" scheme="http://liaoyulei.cn/categories/tips/"/>
+    
+    
+      <category term="php" scheme="http://liaoyulei.cn/tags/php/"/>
+    
+      <category term="pdf" scheme="http://liaoyulei.cn/tags/pdf/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>[视频] PHP 使用 Redis 入门</title>
+    <link href="http://liaoyulei.cn/2016/12/23/php-redis-intro/"/>
+    <id>http://liaoyulei.cn/2016/12/23/php-redis-intro/</id>
+    <published>2016-12-22T16:01:45.000Z</published>
+    <updated>2016-12-22T16:03:33.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>录了一个 PHP 使用 Redis 的入门视频。</p>
+<p>传送门： <a href="http://v.youku.com/v_show/id_XMTg3NzQ3MTAwOA==.html" target="_blank" rel="external">http://v.youku.com/v_show/id_XMTg3NzQ3MTAwOA==.html</a></p>
+<p>-EOF-</p>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;录了一个 PHP 使用 Redis 的入门视频。&lt;/p&gt;
+&lt;p&gt;传送门： &lt;a href=&quot;http://v.youku.com/v_show/id_XMTg3NzQ3MTAwOA==.html&quot; target=&quot;_blank&quot; rel=&quot;external&quot;&gt;http://
+    
+    </summary>
+    
+      <category term="videos" scheme="http://liaoyulei.cn/categories/videos/"/>
+    
+    
+      <category term="php" scheme="http://liaoyulei.cn/tags/php/"/>
+    
+      <category term="redis" scheme="http://liaoyulei.cn/tags/redis/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>在 iOS 中将 HTML5 App 封装为原生应用</title>
+    <link href="http://liaoyulei.cn/2016/12/21/wrap-html5-ios-native/"/>
+    <id>http://liaoyulei.cn/2016/12/21/wrap-html5-ios-native/</id>
+    <published>2016-12-21T09:27:07.000Z</published>
+    <updated>2016-12-22T16:00:22.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>HTML5 App 相比 Native App 有一些突出的优势，但有时候我们希望能够把这些 HTML5 App 封装为 iOS Native App。</p>
+<p>本文描述了一种最简单的方案，演示了如何将一个 PixiJS 的 HTML5 App 封装为 iOS Native App。</p>
+<a id="more"></a>
+<h2 id="原理"><a href="#原理" class="headerlink" title="原理"></a>原理</h2><p>从 iOS 8 开始，Apple 为了让嵌入 HTML5 的应用程序能够获得更好的性能表现，提供了一个新的系统组件 <code>WKWebView</code>。这个 <code>WKWebView</code> 与以前的 <code>UIWebView</code> 相比，最大的改变就是支持 iOS 的高性能 JavaScript 虚拟机，所以在性能上可以保持和 iOS Safari 浏览器同样的表现。</p>
+<p>我们的原生封装就是在一个 iOS Native App 里使用 <code>WKWebView</code> 来跑 PixiJS。</p>
+<p>但光有 <code>WKWebView</code> 还不行，因为 <code>WKWebView</code> 里因为安全限制，是不能直接读取 App 内部的资源和脚本的。所以我们还需要在 App 里嵌入一个 HTTP Server。</p>
+<p>幸运的是已经有开发者创建了一个可以嵌入 iOS Native App 的 HTTP Server 组件。这个组件名为 <code>GCDWebServer</code>，项目地址是 <a href="https://github.com/swisspol/GCDWebServer" target="_blank" rel="external">https://github.com/swisspol/GCDWebServer</a>。</p>
+<p><code>GCDWebServer</code> 简单易用，占用的资源也极少，非常符合我们的需求。</p>
+<p>所以我们的基本思路就是：</p>
+<ul>
+<li>在 iOS Native App 里创建一个 HTTP Server。</li>
+<li>再创建一个 <code>WKWebView</code>。</li>
+<li>让 <code>WKWebView</code> 从内部的 HTTP Server 读取内容并执行，从而把我们的 HTML5 内容跑起来。</li>
+</ul>
+<p>~</p>
+<h2 id="创建-iOS-Native-App"><a href="#创建-iOS-Native-App" class="headerlink" title="创建 iOS Native App"></a>创建 iOS Native App</h2><p>打开 Xcode，选择新建一个 <code>iOS Single View Application</code>，命名为 <code>PixiJS Native</code>。</p>
+<p>从 <a href="https://github.com/swisspol/GCDWebServer/releases" target="_blank" rel="external">https://github.com/swisspol/GCDWebServer/releases</a> 下载 <code>GCDWebServer</code> 的最新版本并解压缩。</p>
+<p>将解压缩得到的 <code>GCDWebServer</code> 目录复制到新建项目里，并添加到工程中。完成后应该如下图：</p>
+<img src="/2016/12/21/wrap-html5-ios-native/add-gcdwebserver-files.png" alt="添加 GCDWebServer 文件到工程中" title="添加 GCDWebServer 文件到工程中">
+<p>并且在工程中添加下列 <code>Frameworks</code>:</p>
+<ul>
+<li>libxml2.tbd</li>
+<li>libz.tbd</li>
+</ul>
+<img src="/2016/12/21/wrap-html5-ios-native/add-frameworks.png" alt="添加编译工程需要的 Frameworks" title="添加编译工程需要的 Frameworks">
+<p>确保工程可以正常编译。</p>
+<p>~</p>
+<h2 id="添加-Native-代码"><a href="#添加-Native-代码" class="headerlink" title="添加 Native 代码"></a>添加 Native 代码</h2><p>打开 <code>ViewController.m</code>，增加：</p>
+<figure class="highlight objc"><table><tr><td class="code"><pre><div class="line"><span class="meta">#import <span class="meta-string">"WebKit/WebKit.h"</span></span></div><div class="line"><span class="meta">#import <span class="meta-string">"GCDWebServer/Core/GCDWebServer.h"</span></span></div><div class="line"></div><div class="line"><span class="meta">#define LOCAL_PORT 29033</span></div></pre></td></tr></table></figure>
+<p>修改 <code>viewDidLoad</code> 方法为：</p>
+<figure class="highlight objc"><table><tr><td class="code"><pre><div class="line">- (<span class="keyword">void</span>)viewDidLoad &#123;</div><div class="line">    [<span class="keyword">super</span> viewDidLoad];</div><div class="line"></div><div class="line">    <span class="built_in">WKWebView</span> *webView = [[<span class="built_in">WKWebView</span> alloc] initWithFrame:<span class="keyword">self</span>.view.bounds];</div><div class="line">    [<span class="keyword">self</span>.view addSubview:webView];</div><div class="line"></div><div class="line">    <span class="keyword">id</span> basedir = [<span class="built_in">NSString</span> stringWithFormat:<span class="string">@"%@/src"</span>,</div><div class="line">                  [[<span class="built_in">NSBundle</span> mainBundle] resourcePath]];</div><div class="line"></div><div class="line">    GCDWebServer* webServer = [[GCDWebServer alloc] init];</div><div class="line">    [webServer addGETHandlerForBasePath:<span class="string">@"/"</span></div><div class="line">                          directoryPath:basedir</div><div class="line">                          indexFilename:<span class="string">@"index.html"</span></div><div class="line">                               cacheAge:<span class="number">0</span></div><div class="line">                     allowRangeRequests:<span class="literal">YES</span>];</div><div class="line"></div><div class="line">    <span class="comment">//DEBUG = 0</span></div><div class="line">    <span class="comment">//VERBOSE = 1</span></div><div class="line">    <span class="comment">//INFO = 2</span></div><div class="line">    <span class="comment">//WARNING = 3</span></div><div class="line">    <span class="comment">//ERROR = 4</span></div><div class="line">    [GCDWebServer setLogLevel:<span class="number">0</span>];</div><div class="line">    <span class="keyword">id</span> options = [<span class="built_in">NSMutableDictionary</span> dictionary];</div><div class="line">    [options setObject:[<span class="built_in">NSNumber</span> numberWithInteger:LOCAL_PORT]</div><div class="line">                forKey:GCDWebServerOption_Port];</div><div class="line">    [options setObject:[<span class="built_in">NSNumber</span> numberWithBool:<span class="literal">YES</span>]</div><div class="line">                forKey:GCDWebServerOption_BindToLocalhost];</div><div class="line">    [webServer startWithOptions:options error:<span class="literal">nil</span>];</div><div class="line"></div><div class="line">    <span class="keyword">id</span> urlStr = [<span class="built_in">NSString</span> stringWithFormat:<span class="string">@"http://127.0.0.1:%d/"</span>, LOCAL_PORT];</div><div class="line">    <span class="keyword">id</span> url = [<span class="built_in">NSURL</span> URLWithString:urlStr];</div><div class="line">    <span class="keyword">id</span> request = [[<span class="built_in">NSURLRequest</span> alloc] initWithURL:url];</div><div class="line">    [webView loadRequest:request];</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>这一段代码分为几个部分：</p>
+<ol>
+<li>创建一个 <code>WKWebView</code>，并且填满整个显示空间。</li>
+<li>将 App 里的 <code>src</code> 目录作为 HTML5 内容的根目录。</li>
+<li>创建一个 <code>GCDWebServer</code> 对象实例，并设置根目录、默认文件、缓存策略等。这里 <code>cacheAge</code> 设置为 0 是让每次应用启动都可以确保读取到最新的内容。</li>
+<li>让 WebServer 监听本机的指定端口号，这样从外部是无法访问 WebServer 的，确保了安全。</li>
+<li>最后，让 <code>WKWebView</code> 访问本机 WebServer 的地址。</li>
+</ol>
+<p>~</p>
+<h2 id="添加-HTML5-内容"><a href="#添加-HTML5-内容" class="headerlink" title="添加 HTML5 内容"></a>添加 HTML5 内容</h2><p>在项目目录里新建一个 <code>src</code> 目录，放入要运行的 HTML5 内容。</p>
+<p>然后将 <code>src</code> 目录拖动到 Xcode 工程中，并且选择 <code>Create folder references</code>：</p>
+<img src="/2016/12/21/wrap-html5-ios-native/add-src-folder.png" alt="添加 src 目录为引用" title="添加 src 目录为引用">
+<p>添加完成后，<code>src</code> 目录在 Xcode 工程里的图标应该是蓝色的。</p>
+<p>如果一切顺利，此时执行工程应该就可以在模拟器或者 iPhone 上看到我们的 HTML5 内容了。</p>
+<img src="/2016/12/21/wrap-html5-ios-native/run.jpg" alt="运行效果" title="运行效果">
+<p>~</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>本文提供的方案简单易行，但也存在一个主要的问题。那就是运行在 Native App 里的 HTML5 内容无法访问一些 iOS 原生接口，例如 IAP。</p>
+<p>这个问题的解决方案：</p>
+<ul>
+<li>自己对这些 iOS 原生接口封装为 JavaScript 接口，给 HTML5 内容调用。</li>
+<li>使用 PhoneGap 等现成的框架，它们已经封装了大部分常用的 iOS 原生接口。</li>
+</ul>
+<p>最后，完整的工程可以从 <a href="https://github.com/dualface/wrap-html5-ios-native" target="_blank" rel="external">https://github.com/dualface/wrap-html5-ios-native</a> 下载。</p>
+<p>-EOF-</p>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;HTML5 App 相比 Native App 有一些突出的优势，但有时候我们希望能够把这些 HTML5 App 封装为 iOS Native App。&lt;/p&gt;
+&lt;p&gt;本文描述了一种最简单的方案，演示了如何将一个 PixiJS 的 HTML5 App 封装为 iOS Native App。&lt;/p&gt;
+    
+    </summary>
+    
+      <category term="tips" scheme="http://liaoyulei.cn/categories/tips/"/>
+    
+    
+      <category term="ios" scheme="http://liaoyulei.cn/tags/ios/"/>
+    
+      <category term="html5" scheme="http://liaoyulei.cn/tags/html5/"/>
+    
+      <category term="javascript" scheme="http://liaoyulei.cn/tags/javascript/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>在 Mac 下配置 Visual Studio Code 为 Unity 代码编辑器</title>
+    <link href="http://liaoyulei.cn/2016/12/21/unity-vscode/"/>
+    <id>http://liaoyulei.cn/2016/12/21/unity-vscode/</id>
+    <published>2016-12-21T03:29:44.000Z</published>
+    <updated>2017-01-09T15:23:51.000Z</updated>
+    
+    <content type="html"><![CDATA[<p>Unity 虽然附带了一个 MonoDevelop 作为代码编辑器，但是这个编辑器并不好用。经过半天折腾，把 Visual Studio Code 打造成了 Unity 的代码编辑器，用起来倍儿爽！</p>
+<p>[2017-01-09 更新]</p>
+<a id="more"></a>
+<p>首先，下载并安装 Visual Studio Code（后文简称 VSC）和 Mono Framework：</p>
+<ul>
+<li>Visual Studio Code: <a href="https://code.visualstudio.com/Download" target="_blank" rel="external">https://code.visualstudio.com/Download</a></li>
+<li>Mono Framework 4.x: <a href="http://www.mono-project.com/download/" target="_blank" rel="external">http://www.mono-project.com/download/</a></li>
+</ul>
+<p>~</p>
+<p>启动 VSC 后，从左侧选择 Extensions 标签，安装下列扩展：</p>
+<ul>
+<li>C#: 对 C# 代码和工程提供全面支持。</li>
+<li>Debugger for Unity: 用来调试 Unity 工程的，如果不用调试功能，这个扩展不用装。</li>
+<li>Unity Tools: 这个扩展是可选的。但其中有一个功能相当方便。选中关键字按 <code>CMD+&#39;</code> 键就可以在线查找 Unity 文档。</li>
+<li>Unity Snippets: 这个扩展是可选的。可以快速创建 <code>Start</code>、<code>Update</code> 等常用方法的片段。</li>
+</ul>
+<p>安装完所有扩展，需要重启 VSC。</p>
+<p>~</p>
+<p>安装完成上述插件后，我们还需要在 Unity 中安装一个 VSC 插件：</p>
+<ul>
+<li>启动 Unity 打开工程</li>
+<li>从 Assets Store 搜索 <code>VSCode</code> (<a href="http://u3d.as/jmM" target="_blank" rel="external">http://u3d.as/jmM</a>)，将这个插件导入到工程中</li>
+<li>打开 Unity 首选项，选中 VSCode 标签后，选中 <code>Enable Integration</code> 和 <code>Use Unity Debugger</code> 选项</li>
+<li>选择菜单 <code>Assets / Open C# Project In Code</code> 即可在 VSC 中打开 Unity 工程</li>
+</ul>
+<img src="/2016/12/21/unity-vscode/unity-preferences.png" alt="unity-preferences.png" title="">
+<p>~</p>
+<p>如何通过 VSC 调试 Unity 工程：</p>
+<ul>
+<li>在 VSC 中选中 Debugger 标签</li>
+<li>如果 <code>launch.json</code> 文件已经存在，需要先删除</li>
+<li>点击项目顶部的齿轮按钮，选择 “Unity Debugger” 添加 <code>launch.json</code> 文件到项目中</li>
+<li>从 Debugger 列表中选择 “Unity Editor”</li>
+<li>在源代码编辑窗口中，点击左侧行号设置断点</li>
+<li>点击 Start Debugging 箭头按钮</li>
+<li>切换到 Unity，点击运行游戏</li>
+<li>切换回 VSCode，即可在断点处进行调试</li>
+</ul>
+<img src="/2016/12/21/unity-vscode/vscode-debugger.png" alt="vscode-debugger.png" title="">
+<p>-EOF-</p>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;Unity 虽然附带了一个 MonoDevelop 作为代码编辑器，但是这个编辑器并不好用。经过半天折腾，把 Visual Studio Code 打造成了 Unity 的代码编辑器，用起来倍儿爽！&lt;/p&gt;
+&lt;p&gt;[2017-01-09 更新]&lt;/p&gt;
+    
+    </summary>
+    
+      <category term="tips" scheme="http://liaoyulei.cn/categories/tips/"/>
+    
+    
+      <category term="unity" scheme="http://liaoyulei.cn/tags/unity/"/>
+    
+      <category term="vscode" scheme="http://liaoyulei.cn/tags/vscode/"/>
+    
+      <category term="tools" scheme="http://liaoyulei.cn/tags/tools/"/>
+    
+      <category term="c#" scheme="http://liaoyulei.cn/tags/c/"/>
+    
   </entry>
   
 </feed>
